@@ -124,6 +124,26 @@ describe("OrderService", () => {
     };
   }
 
+  async function createDirectContext() {
+    const session = await createAnonymousSession();
+
+    const user = await createUser("Store Owner");
+
+    const store = await createStore(user.id);
+
+    const category = await createCategory();
+
+    const product = await createProduct(store.id, category.id);
+
+    return {
+      session,
+      user,
+      store,
+      category,
+      product,
+    };
+  }
+
   async function addCartItem(
     sessionId: string,
     cartId: string,
@@ -143,6 +163,16 @@ describe("OrderService", () => {
 
   const validOrderInput = {
     idempotencyKey: "order-test-001",
+    buyerPhone: "90123456",
+    deliveryCountry: "TG",
+    deliveryCity: "Lome",
+    deliveryAddress: "Rue de test",
+  };
+
+  const validDirectOrderInput = {
+    productId: "",
+    quantity: 2,
+    idempotencyKey: "direct-order-test-001",
     buyerPhone: "90123456",
     deliveryCountry: "TG",
     deliveryCity: "Lome",
@@ -503,6 +533,212 @@ describe("OrderService", () => {
 
     expect(persistedItems[0].quantity).toBe(3);
   });
+
+  describe("createDirect", () => {
+    it("should create an order directly from a valid product", async () => {
+      const { session, store, product } = await createDirectContext();
+
+      const order = await orderService.createDirect(session.id, {
+        ...validDirectOrderInput,
+        productId: product.id,
+      });
+
+      expect(order).toBeDefined();
+      expect(order.id).toBeDefined();
+
+      expect(order.reference).toMatch(/^ORD-\d{8}-[A-F0-9]{6}$/);
+
+      expect(order.store_id).toBe(store.id);
+
+      expect(order.session_id).toBe(session.id);
+
+      expect(order.buyer_user_id).toBeNull();
+
+      expect(order.status).toBe("pending");
+
+      expect(order.currency).toBe("XOF");
+
+      expect(order.buyer_phone).toBe(validDirectOrderInput.buyerPhone);
+
+      expect(order.delivery_country).toBe(
+        validDirectOrderInput.deliveryCountry,
+      );
+
+      expect(order.delivery_city).toBe(
+        validDirectOrderInput.deliveryCity,
+      );
+
+      expect(order.delivery_address).toBe(
+        validDirectOrderInput.deliveryAddress,
+      );
+
+      expect(order.total_amount).toBe("20000.00");
+
+      expect(order.items).toHaveLength(1);
+
+      expect(order.items[0]).toMatchObject({
+        product_id: product.id,
+        product_name: "Produit Test",
+        unit_price: "10000.00",
+        quantity: 2,
+        subtotal: "20000.00",
+      });
+    });
+  });
+
+    it("should use the authenticated user from the session as buyer_user_id", async () => {
+      const session = await createAnonymousSession();
+
+      const buyer = await createUser("Buyer");
+
+      await db("sessions")
+        .where({ id: session.id })
+        .update({
+          user_id: buyer.id,
+        });
+
+      const storeOwner = await createUser("Store Owner");
+      const store = await createStore(storeOwner.id);
+      const category = await createCategory();
+
+      const product = await createProduct(store.id, category.id);
+
+      const order = await orderService.createDirect(session.id, {
+        ...validDirectOrderInput,
+        productId: product.id,
+      });
+
+      expect(order.buyer_user_id).toBe(buyer.id);
+    });
+
+    it("should reject an expired session", async () => {
+      const session = await createAnonymousSession(
+        new Date(Date.now() - 1000),
+      );
+
+      const storeOwner = await createUser("Store Owner");
+      const store = await createStore(storeOwner.id);
+      const category = await createCategory();
+
+      const product = await createProduct(store.id, category.id);
+
+      await expect(
+        orderService.createDirect(session.id, {
+          ...validDirectOrderInput,
+          productId: product.id,
+          idempotencyKey: "direct-expired-001",
+        }),
+      ).rejects.toMatchObject({
+        code: "SESSION_EXPIRED",
+      });
+    });
+
+    it("should reject a nonexistent product", async () => {
+      const session = await createAnonymousSession();
+
+      const fakeProductId =
+        "00000000-0000-0000-0000-000000000000";
+
+      await expect(
+        orderService.createDirect(session.id, {
+          ...validDirectOrderInput,
+          productId: fakeProductId,
+          idempotencyKey: "direct-product-not-found-001",
+        }),
+      ).rejects.toMatchObject({
+        code: "PRODUCT_NOT_FOUND",
+      });
+    });
+
+    it("should reject an unavailable product", async () => {
+      const { session, product } = await createDirectContext();
+
+      await productRepository.setAvailability(
+        product.id,
+        "unavailable",
+      );
+
+      await expect(
+        orderService.createDirect(session.id, {
+          ...validDirectOrderInput,
+          productId: product.id,
+          idempotencyKey: "direct-unavailable-001",
+        }),
+      ).rejects.toMatchObject({
+        code: "PRODUCT_UNAVAILABLE",
+      });
+    });
+
+    it("should reject an archived product", async () => {
+      const { session, product } = await createDirectContext();
+
+      await productRepository.setStatus(
+        product.id,
+        "archived",
+      );
+
+      await expect(
+        orderService.createDirect(session.id, {
+          ...validDirectOrderInput,
+          productId: product.id,
+          idempotencyKey: "direct-archived-001",
+        }),
+      ).rejects.toMatchObject({
+        code: "PRODUCT_INACTIVE",
+      });
+    });
+
+    it("should reject a product from an inactive store", async () => {
+      const { session, store, product } =
+        await createDirectContext();
+
+      await storeRepository.setStatus(
+        store.id,
+        "inactive",
+      );
+
+      await expect(
+        orderService.createDirect(session.id, {
+          ...validDirectOrderInput,
+          productId: product.id,
+          idempotencyKey: "direct-inactive-store-001",
+        }),
+      ).rejects.toMatchObject({
+        code: "STORE_INACTIVE",
+      });
+    });
+
+    it("should reject a quantity equal to zero", async () => {
+      const { session, product } = await createDirectContext();
+
+      await expect(
+        orderService.createDirect(session.id, {
+          ...validDirectOrderInput,
+          productId: product.id,
+          quantity: 0,
+          idempotencyKey: "direct-quantity-zero-001",
+        }),
+      ).rejects.toMatchObject({
+        code: "INVALID_CART_ITEM_QUANTITY",
+      });
+    });
+
+    it("should reject a negative quantity", async () => {
+      const { session, product } = await createDirectContext();
+
+      await expect(
+        orderService.createDirect(session.id, {
+          ...validDirectOrderInput,
+          productId: product.id,
+          quantity: -1,
+          idempotencyKey: "direct-quantity-negative-001",
+        }),
+      ).rejects.toMatchObject({
+        code: "INVALID_CART_ITEM_QUANTITY",
+      });
+    });
+
+
 
   // ---------------------------------------------------------------------------
   // IDEMPOTENCE

@@ -11,6 +11,10 @@ import {
   type CreateOrderItemData,
 } from "../database/repositories/order.repository.js";
 
+import {
+  ProductRepository,
+} from "../database/repositories/product.repository.js";
+
 import { SessionRepository } from "../database/repositories/session.repository.js";
 
 import { CartRepository } from "../database/repositories/cart.repository.js";
@@ -115,6 +119,7 @@ export class OrderService implements IOrderService {
     private readonly cartRepository = new CartRepository(database),
     private readonly cartItemRepository = new CartItemRepository(database),
     private readonly storeRepository = new StoreRepository(database),
+     private readonly productRepository = new ProductRepository(database),
   ) {}
 
   private validateCartItems(items: CartItemWithProductContext[]): void {
@@ -249,6 +254,201 @@ export class OrderService implements IOrderService {
     return updatedOrder;
   }
 
+async createDirect(
+  sessionId: string,
+  input: CreateDirectOrderInput,
+): Promise<OrderWithItems> {
+  /*
+   * 1. Vérifier la session
+   */
+  const session = await this.sessionRepository.findById(sessionId);
+
+  if (!session) {
+    throw createAppError(Errors.SESSION_NOT_FOUND);
+  }
+
+  if (session.expires_at <= new Date()) {
+    throw createAppError(Errors.SESSION_EXPIRED);
+  }
+
+  /*
+   * 2. Vérifier l'idempotency key
+   */
+  const existingOrder =
+    await this.orderRepository.findByIdempotencyKey(
+      input.idempotencyKey,
+    );
+
+  if (existingOrder) {
+    if (existingOrder.session_id !== sessionId) {
+      throw createAppError(
+        Errors.IDEMPOTENCY_KEY_CONFLICT,
+      );
+    }
+
+    return this.buildOrderWithItems(existingOrder);
+  }
+
+  /*
+   * 3. Valider la quantité
+   */
+  if (input.quantity <= 0) {
+    throw createAppError(
+      Errors.INVALID_CART_ITEM_QUANTITY,
+    );
+  }
+
+  /*
+   * 4. Récupérer le produit
+   */
+  const product = await this.database("products")
+    .where({ id: input.productId })
+    .first<{
+      id: string;
+      store_id: string;
+      name: string;
+      price: string;
+      availability: "available" | "unavailable";
+      status: "active" | "archived";
+    }>();
+
+  if (!product) {
+    throw createAppError(Errors.PRODUCT_NOT_FOUND);
+  }
+
+  /*
+   * 5. Valider le produit
+   */
+  if (product.status !== "active") {
+    throw createAppError(Errors.PRODUCT_INACTIVE);
+  }
+
+  if (product.availability !== "available") {
+    throw createAppError(Errors.PRODUCT_UNAVAILABLE);
+  }
+
+  /*
+   * 6. Récupérer le store
+   */
+  const store = await this.storeRepository.findById(
+    product.store_id,
+  );
+
+  if (!store) {
+    throw createAppError(Errors.STORE_NOT_FOUND);
+  }
+
+  if (store.status !== "active") {
+    throw createAppError(Errors.STORE_INACTIVE);
+  }
+
+  /*
+   * 7. Vérifier la devise plateforme
+   */
+  if (store.currency !== PLATFORM_CURRENCY) {
+    throw createAppError(Errors.CURRENCY_MISMATCH);
+  }
+
+  /*
+   * 8. Calcul serveur du montant
+   */
+  const unitPriceMinorUnits = toMinorUnits(product.price);
+
+  const subtotalMinorUnits =
+    unitPriceMinorUnits * input.quantity;
+
+  const totalAmount = fromMinorUnits(subtotalMinorUnits);
+
+  /*
+   * 9. Générer la référence
+   */
+  const orderReference = generateOrderReference();
+
+  /*
+   * 10. Transaction atomique :
+   *     commande + item + événement
+   */
+  const order = await this.database.transaction(async (trx) => {
+    const trxEventRepository = new EventRepository(trx);
+
+    const trxOrderRepository = new OrderRepository(trx);
+
+    const createdOrder = await trxOrderRepository.create({
+      reference: orderReference,
+
+      idempotency_key: input.idempotencyKey,
+
+      store_id: store.id,
+
+      buyer_user_id: session.user_id,
+
+      session_id: session.id,
+
+      status: "pending",
+
+      total_amount: totalAmount,
+
+      currency: PLATFORM_CURRENCY,
+
+      buyer_phone: input.buyerPhone,
+
+      delivery_country: input.deliveryCountry,
+
+      delivery_city: input.deliveryCity,
+
+      delivery_address: input.deliveryAddress,
+    });
+
+    const orderItem = await trxOrderRepository.createItem({
+      order_id: createdOrder.id,
+
+      product_id: product.id,
+
+      product_name: product.name,
+
+      unit_price: fromMinorUnits(unitPriceMinorUnits),
+
+      quantity: input.quantity,
+
+      subtotal: totalAmount,
+    });
+
+    await trxEventRepository.create({
+      event_name: "order.created",
+
+      event_key: `order:${createdOrder.id}:created`,
+
+      session_id: session.id,
+
+      user_id: session.user_id,
+
+      store_id: store.id,
+
+      product_id: product.id,
+
+      order_id: createdOrder.id,
+
+      metadata: {
+        source: "product",
+        item_count: 1,
+        total_amount: totalAmount,
+        currency: PLATFORM_CURRENCY,
+      },
+    });
+
+    return {
+      ...createdOrder,
+      items: [orderItem],
+    };
+  });
+
+  /*
+   * 11. Retourner la commande
+   */
+  return order;
+}*
+
+
   async createFromCart(
     sessionId: string,
     input: CreateOrderInput,
@@ -381,7 +581,7 @@ export class OrderService implements IOrderService {
 
       await trxEventRepository.create({
         event_name: "order.created",
-        event_key: `order:${order.id}:created`,
+        event_key: `order:${createdOrder.id}:created`
         session_id: session.id,
         user_id: session.user_id,
         store_id: store.id,
