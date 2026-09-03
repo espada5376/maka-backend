@@ -1,0 +1,408 @@
+import type { Knex } from "knex";
+import { randomBytes } from "node:crypto";
+
+import db from "../database/knex.js";
+
+import {
+  OrderRepository,
+  type Order,
+  type OrderItem,
+  type OrderStatus,
+  type CreateOrderItemData,
+} from "../database/repositories/order.repository.js";
+
+import { SessionRepository } from "../database/repositories/session.repository.js";
+
+import { CartRepository } from "../database/repositories/cart.repository.js";
+
+import {
+  CartItemRepository,
+  type CartItemWithProductContext,
+} from "../database/repositories/cart-item.repository.js";
+
+import { EventRepository } from "../database/repositories/event.repository.js";
+
+import { StoreRepository } from "../database/repositories/store.repository.js";
+
+import { Errors } from "../common/errors/errors.js";
+import { createAppError } from "../common/errors/create-app-error.js";
+
+export interface CreateOrderInput {
+  idempotencyKey: string;
+  buyerPhone: string;
+  deliveryCountry: string;
+  deliveryCity: string;
+  deliveryAddress: string;
+}
+
+export interface CreateDirectOrderInput {
+  productId: string;
+  quantity: number;
+  idempotencyKey: string;
+  buyerPhone: string;
+  deliveryCountry: string;
+  deliveryCity: string;
+  deliveryAddress: string;
+}
+
+export interface OrderWithItems extends Order {
+  items: OrderItem[];
+}
+
+export interface IOrderService {
+  createFromCart(
+    sessionId: string,
+    input: CreateOrderInput,
+  ): Promise<OrderWithItems>;
+
+  createDirect(
+  sessionId: string,
+  input: CreateDirectOrderInput,
+): Promise<OrderWithItems>;
+
+  getById(orderId: string): Promise<OrderWithItems>;
+
+  getByReference(reference: string): Promise<OrderWithItems>;
+
+  getForSession(sessionId: string): Promise<OrderWithItems[]>;
+
+  getForBuyer(buyerUserId: string): Promise<OrderWithItems[]>;
+
+  getForStore(storeId: string): Promise<OrderWithItems[]>;
+
+  updateStatus(orderId: string, status: OrderStatus): Promise<Order>;
+}
+
+const PLATFORM_CURRENCY = "XOF";
+
+const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  pending: ["pending", "confirmed", "cancelled"],
+
+  confirmed: ["confirmed", "preparing", "cancelled"],
+
+  preparing: ["preparing", "ready", "cancelled"],
+
+  ready: ["ready", "delivering"],
+
+  delivering: ["delivering", "delivered"],
+
+  delivered: ["delivered"],
+
+  cancelled: ["cancelled"],
+};
+
+function generateOrderReference(): string {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+
+  const random = randomBytes(3).toString("hex").toUpperCase();
+
+  return `ORD-${date}-${random}`;
+}
+
+function toMinorUnits(value: string | number): number {
+  return Math.round(Number(value) * 100);
+}
+
+function fromMinorUnits(value: number): number {
+  return value / 100;
+}
+
+export class OrderService implements IOrderService {
+  constructor(
+    private readonly database: Knex = db,
+    private readonly orderRepository = new OrderRepository(database),
+    private readonly sessionRepository = new SessionRepository(database),
+    private readonly cartRepository = new CartRepository(database),
+    private readonly cartItemRepository = new CartItemRepository(database),
+    private readonly storeRepository = new StoreRepository(database),
+  ) {}
+
+  private validateCartItems(items: CartItemWithProductContext[]): void {
+    const storeId = items[0]?.product_store_id;
+
+    if (!storeId) {
+      throw createAppError(Errors.PRODUCT_NOT_FOUND);
+    }
+
+    for (const item of items) {
+      if (item.quantity <= 0) {
+        throw createAppError(Errors.INVALID_CART_ITEM_QUANTITY);
+      }
+
+      if (item.product_status !== "active") {
+        throw createAppError(Errors.PRODUCT_INACTIVE);
+      }
+
+      if (item.product_availability !== "available") {
+        throw createAppError(Errors.PRODUCT_UNAVAILABLE);
+      }
+
+      if (item.product_store_id !== storeId) {
+        throw createAppError(Errors.MULTIPLE_STORES_IN_CART);
+      }
+
+      if (item.store_status !== "active") {
+        throw createAppError(Errors.STORE_INACTIVE);
+      }
+    }
+  }
+
+  private calculateTotal(items: CartItemWithProductContext[]): number {
+    const totalMinorUnits = items.reduce((total, item) => {
+      const unitPriceMinorUnits = toMinorUnits(item.product_price);
+
+      return total + unitPriceMinorUnits * item.quantity;
+    }, 0);
+
+    return fromMinorUnits(totalMinorUnits);
+  }
+
+  private buildOrderItems(
+    orderId: string,
+    cartItems: CartItemWithProductContext[],
+  ): CreateOrderItemData[] {
+    return cartItems.map((item) => {
+      const unitPriceMinorUnits = toMinorUnits(item.product_price);
+
+      const subtotalMinorUnits = unitPriceMinorUnits * item.quantity;
+
+      return {
+        order_id: orderId,
+        product_id: item.product_id,
+        product_name: item.product_name,
+        unit_price: fromMinorUnits(unitPriceMinorUnits),
+        quantity: item.quantity,
+        subtotal: fromMinorUnits(subtotalMinorUnits),
+      };
+    });
+  }
+
+  private async buildOrderWithItems(order: Order): Promise<OrderWithItems> {
+    const items = await this.orderRepository.findItems(order.id);
+
+    return {
+      ...order,
+      items,
+    };
+  }
+
+  async getById(orderId: string): Promise<OrderWithItems> {
+    const order = await this.orderRepository.findById(orderId);
+
+    if (!order) {
+      throw createAppError(Errors.ORDER_NOT_FOUND);
+    }
+
+    return this.buildOrderWithItems(order);
+  }
+
+  async getByReference(reference: string): Promise<OrderWithItems> {
+    const order = await this.orderRepository.findByReference(reference);
+
+    if (!order) {
+      throw createAppError(Errors.ORDER_NOT_FOUND);
+    }
+
+    return this.buildOrderWithItems(order);
+  }
+
+  async getForSession(sessionId: string): Promise<OrderWithItems[]> {
+    const orders = await this.orderRepository.findBySessionId(sessionId);
+
+    return Promise.all(orders.map((order) => this.buildOrderWithItems(order)));
+  }
+
+  async getForBuyer(buyerUserId: string): Promise<OrderWithItems[]> {
+    const orders = await this.orderRepository.findByBuyerUserId(buyerUserId);
+
+    return Promise.all(orders.map((order) => this.buildOrderWithItems(order)));
+  }
+
+  async getForStore(storeId: string): Promise<OrderWithItems[]> {
+    const orders = await this.orderRepository.findByStoreId(storeId);
+
+    return Promise.all(orders.map((order) => this.buildOrderWithItems(order)));
+  }
+
+  async updateStatus(orderId: string, newStatus: OrderStatus): Promise<Order> {
+    const order = await this.orderRepository.findById(orderId);
+
+    if (!order) {
+      throw createAppError(Errors.ORDER_NOT_FOUND);
+    }
+
+    const allowedTransitions = ALLOWED_TRANSITIONS[order.status];
+
+    if (!allowedTransitions.includes(newStatus)) {
+      throw createAppError(Errors.INVALID_ORDER_STATUS_TRANSITION);
+    }
+
+    const updatedOrder = await this.orderRepository.updateStatus(
+      orderId,
+      newStatus,
+    );
+
+    if (!updatedOrder) {
+      throw createAppError(Errors.ORDER_NOT_FOUND);
+    }
+
+    return updatedOrder;
+  }
+
+  async createFromCart(
+    sessionId: string,
+    input: CreateOrderInput,
+  ): Promise<OrderWithItems> {
+    /*
+     * 1. Vérifier la session
+     */
+    const session = await this.sessionRepository.findById(sessionId);
+
+    if (!session) {
+      throw createAppError(Errors.SESSION_NOT_FOUND);
+    }
+
+    if (session.expires_at <= new Date()) {
+      throw createAppError(Errors.SESSION_EXPIRED);
+    }
+
+    /*
+     * 2. Vérifier l'idempotency key
+     */
+    const existingOrder = await this.orderRepository.findByIdempotencyKey(
+      input.idempotencyKey,
+    );
+
+    if (existingOrder) {
+      if (existingOrder.session_id !== sessionId) {
+        throw createAppError(Errors.IDEMPOTENCY_KEY_CONFLICT);
+      }
+
+      return this.buildOrderWithItems(existingOrder);
+    }
+
+    /*
+     * 3. Vérifier le panier
+     */
+    const cart = await this.cartRepository.findBySessionId(sessionId);
+
+    if (!cart) {
+      throw createAppError(Errors.CART_NOT_FOUND);
+    }
+
+    /*
+     * 4. Récupérer les articles avec
+     *    le contexte produit/store
+     */
+    const cartItems =
+      await this.cartItemRepository.findByCartIdWithProductContext(cart.id);
+
+    if (cartItems.length === 0) {
+      throw createAppError(Errors.CART_EMPTY);
+    }
+
+    /*
+     * 5. Valider les articles
+     */
+    this.validateCartItems(cartItems);
+
+    /*
+     * 6. Récupérer le store
+     */
+    const storeId = cartItems[0].product_store_id;
+
+    const store = await this.storeRepository.findById(storeId);
+
+    if (!store) {
+      throw createAppError(Errors.STORE_NOT_FOUND);
+    }
+
+    if (store.status !== "active") {
+      throw createAppError(Errors.STORE_INACTIVE);
+    }
+
+    /*
+     * 7. Vérifier la devise plateforme
+     */
+    if (store.currency !== PLATFORM_CURRENCY) {
+      throw createAppError(Errors.CURRENCY_MISMATCH);
+    }
+
+    /*
+     * 8. Calcul serveur du total
+     */
+    const totalAmount = this.calculateTotal(cartItems);
+
+    /*
+     * 9. Générer la référence
+     */
+    const orderReference = generateOrderReference();
+
+    /*
+     * 10. Transaction atomique :
+     *     commande + items + vidage panier
+     */
+    const order = await this.database.transaction(async (trx) => {
+      const trxEventRepository = new EventRepository(trx);
+
+      const trxOrderRepository = new OrderRepository(trx);
+
+      const trxCartItemRepository = new CartItemRepository(trx);
+
+      const createdOrder = await trxOrderRepository.create({
+        reference: orderReference,
+
+        idempotency_key: input.idempotencyKey,
+
+        store_id: store.id,
+
+        buyer_user_id: session.user_id,
+
+        session_id: session.id,
+
+        status: "pending",
+
+        total_amount: totalAmount,
+
+        currency: PLATFORM_CURRENCY,
+
+        buyer_phone: input.buyerPhone,
+
+        delivery_country: input.deliveryCountry,
+
+        delivery_city: input.deliveryCity,
+
+        delivery_address: input.deliveryAddress,
+      });
+
+      const orderItems = this.buildOrderItems(createdOrder.id, cartItems);
+
+      await trxOrderRepository.createItems(orderItems);
+
+      await trxEventRepository.create({
+        event_name: "order.created",
+        event_key: `order:${order.id}:created`,
+        session_id: session.id,
+        user_id: session.user_id,
+        store_id: store.id,
+        order_id: order.id,
+        metadata: {
+          source: "cart",
+          item_count: orderItems.length,
+          total_amount: totalAmount,
+          currency: PLATFORM_CURRENCY,
+        },
+      });
+
+      await trxCartItemRepository.deleteByCartId(cart.id);
+
+      return createdOrder;
+    });
+
+    /*
+     * 11. Retourner la commande avec
+     *     ses items
+     */
+    return this.buildOrderWithItems(order);
+  }
+}

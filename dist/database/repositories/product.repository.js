@@ -1,0 +1,76 @@
+import db from "../knex.js";
+export class ProductRepository {
+    database;
+    constructor(database = db) {
+        this.database = database;
+    }
+    async findById(id) {
+        return this.database("products").where({ id }).first();
+    }
+    async findByStoreId(storeId) {
+        return this.database("products")
+            .where({ store_id: storeId })
+            .orderBy("created_at", "desc");
+    }
+    async findByCategoryId(categoryId) {
+        return this.database("products")
+            .where({
+            category_id: categoryId,
+            status: "active",
+        })
+            .orderBy("created_at", "desc");
+    }
+    async findAvailableByStoreId(storeId) {
+        return this.database("products")
+            .where({
+            store_id: storeId,
+            status: "active",
+            availability: "available",
+        })
+            .orderBy("created_at", "desc");
+    }
+    async create(data) {
+        const [product] = await this.database("products")
+            .insert({
+            store_id: data.store_id,
+            category_id: data.category_id,
+            name: data.name,
+            description: data.description ?? null,
+            price: data.price,
+            availability: data.availability ?? "available",
+            status: data.status ?? "active",
+        })
+            .returning("*");
+        return product;
+    }
+    async update(id, data) {
+        const [product] = await this.database("products")
+            .where({ id })
+            .update({
+            ...data,
+            updated_at: this.database.fn.now(),
+        })
+            .returning("*");
+        return product;
+    }
+    async setAvailability(id, availability) {
+        const [product] = await this.database("products")
+            .where({ id })
+            .update({
+            availability,
+            updated_at: this.database.fn.now(),
+        })
+            .returning("*");
+        return product;
+    }
+    async setStatus(id, status) {
+        const [product] = await this.database("products")
+            .where({ id })
+            .update({
+            status,
+            updated_at: this.database.fn.now(),
+        })
+            .returning("*");
+        return product;
+    }
+}
