@@ -11,9 +11,7 @@ import {
   type CreateOrderItemData,
 } from "../database/repositories/order.repository.js";
 
-import {
-  ProductRepository,
-} from "../database/repositories/product.repository.js";
+import { ProductRepository } from "../database/repositories/product.repository.js";
 
 import { SessionRepository } from "../database/repositories/session.repository.js";
 
@@ -60,9 +58,9 @@ export interface IOrderService {
   ): Promise<OrderWithItems>;
 
   createDirect(
-  sessionId: string,
-  input: CreateDirectOrderInput,
-): Promise<OrderWithItems>;
+    sessionId: string,
+    input: CreateDirectOrderInput,
+  ): Promise<OrderWithItems>;
 
   getById(orderId: string): Promise<OrderWithItems>;
 
@@ -119,7 +117,7 @@ export class OrderService implements IOrderService {
     private readonly cartRepository = new CartRepository(database),
     private readonly cartItemRepository = new CartItemRepository(database),
     private readonly storeRepository = new StoreRepository(database),
-     private readonly productRepository = new ProductRepository(database),
+    private readonly productRepository = new ProductRepository(database),
   ) {}
 
   private validateCartItems(items: CartItemWithProductContext[]): void {
@@ -254,200 +252,182 @@ export class OrderService implements IOrderService {
     return updatedOrder;
   }
 
-async createDirect(
-  sessionId: string,
-  input: CreateDirectOrderInput,
-): Promise<OrderWithItems> {
-  /*
-   * 1. Vérifier la session
-   */
-  const session = await this.sessionRepository.findById(sessionId);
+  async createDirect(
+    sessionId: string,
+    input: CreateDirectOrderInput,
+  ): Promise<OrderWithItems> {
+    /*
+     * 1. Vérifier la session
+     */
+    const session = await this.sessionRepository.findById(sessionId);
 
-  if (!session) {
-    throw createAppError(Errors.SESSION_NOT_FOUND);
-  }
+    if (!session) {
+      throw createAppError(Errors.SESSION_NOT_FOUND);
+    }
 
-  if (session.expires_at <= new Date()) {
-    throw createAppError(Errors.SESSION_EXPIRED);
-  }
+    if (session.expires_at <= new Date()) {
+      throw createAppError(Errors.SESSION_EXPIRED);
+    }
 
-  /*
-   * 2. Vérifier l'idempotency key
-   */
-  const existingOrder =
-    await this.orderRepository.findByIdempotencyKey(
+    /*
+     * 2. Vérifier l'idempotency key
+     */
+    const existingOrder = await this.orderRepository.findByIdempotencyKey(
       input.idempotencyKey,
     );
 
-  if (existingOrder) {
-    if (existingOrder.session_id !== sessionId) {
-      throw createAppError(
-        Errors.IDEMPOTENCY_KEY_CONFLICT,
-      );
+    if (existingOrder) {
+      if (existingOrder.session_id !== sessionId) {
+        throw createAppError(Errors.IDEMPOTENCY_KEY_CONFLICT);
+      }
+
+      return this.buildOrderWithItems(existingOrder);
     }
 
-    return this.buildOrderWithItems(existingOrder);
-  }
+    /*
+     * 3. Valider la quantité
+     */
+    if (input.quantity <= 0) {
+      throw createAppError(Errors.INVALID_CART_ITEM_QUANTITY);
+    }
 
-  /*
-   * 3. Valider la quantité
-   */
-  if (input.quantity <= 0) {
-    throw createAppError(
-      Errors.INVALID_CART_ITEM_QUANTITY,
-    );
-  }
+    /*
+     * 4. Récupérer le produit
+     */
+    const product = await this.productRepository.findById(input.productId);
 
-  /*
-   * 4. Récupérer le produit
-   */
-  const product = await this.database("products")
-    .where({ id: input.productId })
-    .first<{
-      id: string;
-      store_id: string;
-      name: string;
-      price: string;
-      availability: "available" | "unavailable";
-      status: "active" | "archived";
-    }>();
+    if (!product) {
+      throw createAppError(Errors.PRODUCT_NOT_FOUND);
+    }
 
-  if (!product) {
-    throw createAppError(Errors.PRODUCT_NOT_FOUND);
-  }
+    /*
+     * 5. Valider le produit
+     */
+    if (product.status !== "active") {
+      throw createAppError(Errors.PRODUCT_INACTIVE);
+    }
 
-  /*
-   * 5. Valider le produit
-   */
-  if (product.status !== "active") {
-    throw createAppError(Errors.PRODUCT_INACTIVE);
-  }
+    if (product.availability !== "available") {
+      throw createAppError(Errors.PRODUCT_UNAVAILABLE);
+    }
 
-  if (product.availability !== "available") {
-    throw createAppError(Errors.PRODUCT_UNAVAILABLE);
-  }
+    /*
+     * 6. Récupérer le store
+     */
+    const store = await this.storeRepository.findById(product.store_id);
 
-  /*
-   * 6. Récupérer le store
-   */
-  const store = await this.storeRepository.findById(
-    product.store_id,
-  );
+    if (!store) {
+      throw createAppError(Errors.STORE_NOT_FOUND);
+    }
 
-  if (!store) {
-    throw createAppError(Errors.STORE_NOT_FOUND);
-  }
+    if (store.status !== "active") {
+      throw createAppError(Errors.STORE_INACTIVE);
+    }
 
-  if (store.status !== "active") {
-    throw createAppError(Errors.STORE_INACTIVE);
-  }
+    /*
+     * 7. Vérifier la devise plateforme
+     */
+    if (store.currency !== PLATFORM_CURRENCY) {
+      throw createAppError(Errors.CURRENCY_MISMATCH);
+    }
 
-  /*
-   * 7. Vérifier la devise plateforme
-   */
-  if (store.currency !== PLATFORM_CURRENCY) {
-    throw createAppError(Errors.CURRENCY_MISMATCH);
-  }
+    /*
+     * 8. Calcul serveur du montant
+     */
+    const unitPriceMinorUnits = toMinorUnits(product.price);
 
-  /*
-   * 8. Calcul serveur du montant
-   */
-  const unitPriceMinorUnits = toMinorUnits(product.price);
+    const subtotalMinorUnits = unitPriceMinorUnits * input.quantity;
 
-  const subtotalMinorUnits =
-    unitPriceMinorUnits * input.quantity;
+    const totalAmount = fromMinorUnits(subtotalMinorUnits);
 
-  const totalAmount = fromMinorUnits(subtotalMinorUnits);
+    /*
+     * 9. Générer la référence
+     */
+    const orderReference = generateOrderReference();
 
-  /*
-   * 9. Générer la référence
-   */
-  const orderReference = generateOrderReference();
+    /*
+     * 10. Transaction atomique :
+     *     commande + item + événement
+     */
+    const order = await this.database.transaction(async (trx) => {
+      const trxEventRepository = new EventRepository(trx);
 
-  /*
-   * 10. Transaction atomique :
-   *     commande + item + événement
-   */
-  const order = await this.database.transaction(async (trx) => {
-    const trxEventRepository = new EventRepository(trx);
+      const trxOrderRepository = new OrderRepository(trx);
 
-    const trxOrderRepository = new OrderRepository(trx);
+      const createdOrder = await trxOrderRepository.create({
+        reference: orderReference,
 
-    const createdOrder = await trxOrderRepository.create({
-      reference: orderReference,
+        idempotency_key: input.idempotencyKey,
 
-      idempotency_key: input.idempotencyKey,
+        store_id: store.id,
 
-      store_id: store.id,
+        buyer_user_id: session.user_id,
 
-      buyer_user_id: session.user_id,
+        session_id: session.id,
 
-      session_id: session.id,
+        status: "pending",
 
-      status: "pending",
-
-      total_amount: totalAmount,
-
-      currency: PLATFORM_CURRENCY,
-
-      buyer_phone: input.buyerPhone,
-
-      delivery_country: input.deliveryCountry,
-
-      delivery_city: input.deliveryCity,
-
-      delivery_address: input.deliveryAddress,
-    });
-
-    const orderItem = await trxOrderRepository.createItem({
-      order_id: createdOrder.id,
-
-      product_id: product.id,
-
-      product_name: product.name,
-
-      unit_price: fromMinorUnits(unitPriceMinorUnits),
-
-      quantity: input.quantity,
-
-      subtotal: totalAmount,
-    });
-
-    await trxEventRepository.create({
-      event_name: "order.created",
-
-      event_key: `order:${createdOrder.id}:created`,
-
-      session_id: session.id,
-
-      user_id: session.user_id,
-
-      store_id: store.id,
-
-      product_id: product.id,
-
-      order_id: createdOrder.id,
-
-      metadata: {
-        source: "product",
-        item_count: 1,
         total_amount: totalAmount,
+
         currency: PLATFORM_CURRENCY,
-      },
+
+        buyer_phone: input.buyerPhone,
+
+        delivery_country: input.deliveryCountry,
+
+        delivery_city: input.deliveryCity,
+
+        delivery_address: input.deliveryAddress,
+      });
+
+      const orderItem = await trxOrderRepository.createItem({
+        order_id: createdOrder.id,
+
+        product_id: product.id,
+
+        product_name: product.name,
+
+        unit_price: fromMinorUnits(unitPriceMinorUnits),
+
+        quantity: input.quantity,
+
+        subtotal: totalAmount,
+      });
+
+      await trxEventRepository.create({
+        event_name: "order.created",
+
+        event_key: `order:${createdOrder.id}:created`,
+
+        session_id: session.id,
+
+        user_id: session.user_id,
+
+        store_id: store.id,
+
+        product_id: product.id,
+
+        order_id: createdOrder.id,
+
+        metadata: {
+          source: "product",
+          item_count: 1,
+          total_amount: totalAmount,
+          currency: PLATFORM_CURRENCY,
+        },
+      });
+
+      return {
+        ...createdOrder,
+        items: [orderItem],
+      };
     });
 
-    return {
-      ...createdOrder,
-      items: [orderItem],
-    };
-  });
-
-  /*
-   * 11. Retourner la commande
-   */
-  return order;
-}*
-
+    /*
+     * 11. Retourner la commande
+     */
+    return order;
+  }
 
   async createFromCart(
     sessionId: string,
@@ -581,11 +561,11 @@ async createDirect(
 
       await trxEventRepository.create({
         event_name: "order.created",
-        event_key: `order:${createdOrder.id}:created`
+        event_key: `order:${createdOrder.id}:created`,
         session_id: session.id,
         user_id: session.user_id,
         store_id: store.id,
-        order_id: order.id,
+        order_id: createdOrder.id,
         metadata: {
           source: "cart",
           item_count: orderItems.length,
