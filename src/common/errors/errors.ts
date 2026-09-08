@@ -88,4 +88,72 @@ export const Errors = {
     message: "Store currency does not match the platform currency",
     statusCode: 400,
   },
+
+  EVENT_NOT_FOUND: {
+    code: "EVENT_NOT_FOUND",
+    message: "Event not found.",
+    statusCode: 404,
+  },
+  INVALID_EVENT: {
+    code: "INVALID_EVENT",
+    message: "Invalid event.",
+    statusCode: 400,
+  },
+
+  STORE_ALREADY_EXISTS: {
+    code: "STORE_ALREADY_EXISTS",
+    message: "User already has a store",
+    statusCode: 409,
+  },
+
+  STORE_FORBIDDEN: {
+    code: "STORE_FORBIDDEN",
+    message: "You do not have permission to access this store",
+    statusCode: 403,
+  },
+
+  INVALID_STORE: {
+    code: "INVALID_STORE",
+    message: "Invalid store data",
+    statusCode: 400,
+  },
+
+  INVALID_STORE_STATUS_TRANSITION: {
+    code: "INVALID_STORE_STATUS_TRANSITION",
+    message: "Invalid store status transition",
+    statusCode: 400,
+  },
+
+CATEGORY_NOT_FOUND: {
+  code: "CATEGORY_NOT_FOUND",
+  message: "Category not found",
+  statusCode: 404,
+},
+
+CATEGORY_INACTIVE: {
+  code: "CATEGORY_INACTIVE",
+  message: "Category is inactive",
+  statusCode: 400,
+},
+
+PRODUCT_FORBIDDEN: {
+  code: "PRODUCT_FORBIDDEN",
+  message: "You do not have permission to access this product",
+  statusCode: 403,
+},
+
+INVALID_PRODUCT: {
+  code: "INVALID_PRODUCT",
+  message: "Invalid product data",
+  statusCode: 400,
+},
+
+
+INVALID_PRODUCT_STATUS_TRANSITION: {
+  code: "INVALID_PRODUCT_STATUS_TRANSITION",
+  message: "Invalid product status transition",
+  statusCode: 400,
+},
+
+
 } as const;
