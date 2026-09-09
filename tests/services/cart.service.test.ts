@@ -1,442 +1,1115 @@
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-
-import db from "../../src/database/knex";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 
 import {
   CartService,
   CartServiceError,
   CartErrorCode,
-} from "../../src/services/cart.service";
+} from "../../src/services/cart.service.js";
 
-import { UserRepository } from "../../src/database/repositories/user.repository";
+import type { Cart } from "../../src/database/repositories/cart.repository.js";
+import type {
+  CartItem,
+  CartItemWithProductContext,
+} from "../../src/database/repositories/cart-item.repository.js";
+import type { Product } from "../../src/database/repositories/product.repository.js";
+import type { Store } from "../../src/database/repositories/store.repository.js";
 
-import { StoreRepository } from "../../src/database/repositories/store.repository";
+const mocks = vi.hoisted(() => ({
+  database: {
+    transaction: vi.fn(),
+  },
 
-import { CategoryRepository } from "../../src/database/repositories/category.repository";
+  cartRepository: {
+    findBySessionId: vi.fn(),
+  },
 
-import { ProductRepository } from "../../src/database/repositories/product.repository";
+  cartItemRepository: {
+    findById: vi.fn(),
+    findByCartId: vi.fn(),
+    findByCartAndProduct: vi.fn(),
+    findByCartIdWithProductContext: vi.fn(),
+    create: vi.fn(),
+    updateQuantity: vi.fn(),
+    delete: vi.fn(),
+  },
 
-import { CartRepository } from "../../src/database/repositories/cart.repository";
+  productRepository: {
+    findById: vi.fn(),
+  },
 
-import { CartItemRepository } from "../../src/database/repositories/cart-item.repository";
+  storeRepository: {
+    findById: vi.fn(),
+  },
 
-import { cleanDatabase } from "../helpers/database";
+  eventRepository: {
+    create: vi.fn(),
+  },
+}));
+
+vi.mock("../../src/database/knex.js", () => ({
+  default: mocks.database,
+}));
+
+vi.mock("../../src/database/repositories/cart.repository.js", () => ({
+  CartRepository: class {
+    findBySessionId = mocks.cartRepository.findBySessionId;
+  },
+}));
+
+vi.mock("../../src/database/repositories/cart-item.repository.js", () => ({
+  CartItemRepository: class {
+    findById = mocks.cartItemRepository.findById;
+    findByCartId = mocks.cartItemRepository.findByCartId;
+    findByCartAndProduct = mocks.cartItemRepository.findByCartAndProduct;
+    findByCartIdWithProductContext =
+      mocks.cartItemRepository.findByCartIdWithProductContext;
+    create = mocks.cartItemRepository.create;
+    updateQuantity = mocks.cartItemRepository.updateQuantity;
+    delete = mocks.cartItemRepository.delete;
+  },
+}));
+
+vi.mock("../../src/database/repositories/product.repository.js", () => ({
+  ProductRepository: class {
+    findById = mocks.productRepository.findById;
+  },
+}));
+
+vi.mock("../../src/database/repositories/store.repository.js", () => ({
+  StoreRepository: class {
+    findById = mocks.storeRepository.findById;
+  },
+}));
+
+vi.mock("../../src/database/repositories/event.repository.js", () => ({
+  EventRepository: class {
+    create = mocks.eventRepository.create;
+  },
+}));
 
 describe("CartService", () => {
-  const cartService = new CartService(db);
+  let cartService: CartService;
 
-  const userRepository = new UserRepository(db);
+  const sessionId = "session-1";
+  const cartId = "cart-1";
+  const productId = "product-1";
+  const itemId = "item-1";
+  const storeId = "store-1";
 
-  const storeRepository = new StoreRepository(db);
+  const activeStore: Store = {
+    id: storeId,
+    owner_id: "owner-1",
+    name: "Ma Boutique",
+    description: null,
+    country: "TG",
+    city: "Lomé",
+    currency: "XOF",
+    status: "active",
+    created_at: new Date(),
+    updated_at: new Date(),
+  };
 
-  const categoryRepository = new CategoryRepository(db);
+  const inactiveStore: Store = {
+    ...activeStore,
+    status: "inactive",
+  };
 
-  const productRepository = new ProductRepository(db);
+  const activeProduct: Product = {
+    id: productId,
+    store_id: storeId,
+    category_id: "category-1",
+    name: "Produit Test",
+    description: null,
+    price: "10000.00",
+    availability: "available",
+    status: "active",
+    created_at: new Date(),
+    updated_at: new Date(),
+  };
 
-  const cartRepository = new CartRepository(db);
+  const unavailableProduct: Product = {
+    ...activeProduct,
+    availability: "unavailable",
+  };
 
-  const cartItemRepository = new CartItemRepository(db);
+  const archivedProduct: Product = {
+    ...activeProduct,
+    status: "archived",
+  };
 
-  beforeAll(async () => {
-    await db.migrate.latest();
-  });
+  const cart: Cart = {
+    id: cartId,
+    session_id: sessionId,
+    created_at: new Date(),
+    updated_at: new Date(),
+  };
 
-  beforeEach(async () => {
-    await cleanDatabase();
-  });
+  const cartItem: CartItem = {
+    id: itemId,
+    cart_id: cartId,
+    product_id: productId,
+    quantity: 2,
+    created_at: new Date(),
+    updated_at: new Date(),
+  };
 
-  async function createAnonymousSession() {
-    const [session] = await db("sessions")
-      .insert({
-        user_id: null,
-        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      })
-      .returning("*");
-
-    return session;
-  }
-
-  async function createUser(name = "Test User") {
-    return userRepository.create({
-      phone: `9${Date.now()}${Math.floor(Math.random() * 1000)}`,
-      name,
-    });
-  }
-
-  async function createStore(ownerId: string, name = "Ma Boutique") {
-    return storeRepository.create({
-      owner_id: ownerId,
-      name,
-      country: "TG",
-      city: "Lomé",
-      currency: "XOF",
-    });
-  }
-
-  async function createCategory() {
-    return categoryRepository.create({
-      name: "Beauté",
-      slug: `beaute-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
-    });
-  }
-
-  async function createProduct(
-    storeId: string,
-    categoryId: string,
-    options: {
-      name?: string;
-      price?: number;
-      availability?: "available" | "unavailable";
-      status?: "active" | "archived";
-    } = {},
-  ) {
-    return productRepository.create({
-      store_id: storeId,
-      category_id: categoryId,
-      name: options.name ?? "Produit Test",
-      price: options.price ?? 10000,
-      availability: options.availability ?? "available",
-      status: options.status ?? "active",
-    });
-  }
-
-  async function createCartContext() {
-    const session = await createAnonymousSession();
-
-    const user = await createUser("Store Owner");
-
-    const store = await createStore(user.id);
-
-    const category = await createCategory();
-
-    const cart = await cartRepository.create({
-      session_id: session.id,
-    });
-
+  function makeContextItem(
+    overrides: Partial<CartItemWithProductContext> = {},
+  ): CartItemWithProductContext {
     return {
-      session,
-      user,
-      store,
-      category,
-      cart,
+      ...cartItem,
+      product_name: activeProduct.name,
+      product_price: activeProduct.price,
+      product_availability: activeProduct.availability,
+      product_status: activeProduct.status,
+      product_store_id: activeProduct.store_id,
+      store_status: activeStore.status,
+      ...overrides,
     };
   }
 
-  it("should add an available product to the cart", async () => {
-    const { session, store, category } = await createCartContext();
+  function setupActiveProduct() {
+    mocks.cartRepository.findBySessionId.mockResolvedValue(cart);
+    mocks.productRepository.findById.mockResolvedValue(activeProduct);
+    mocks.storeRepository.findById.mockResolvedValue(activeStore);
+  }
 
-    const product = await createProduct(store.id, category.id);
-
-    const item = await cartService.addItem(session.id, product.id, 2);
-
-    expect(item).toBeDefined();
-    expect(item?.cart_id).toBe(
-      (await cartRepository.findBySessionId(session.id))?.id,
-    );
-    expect(item?.product_id).toBe(product.id);
-    expect(item?.quantity).toBe(2);
-  });
-
-  it("should reject an unavailable product", async () => {
-    const { session, store, category } = await createCartContext();
-
-    const product = await createProduct(store.id, category.id, {
-      availability: "unavailable",
+  function setupTransaction() {
+    mocks.database.transaction.mockImplementation(async (callback) => {
+      return callback(mocks.database);
     });
-
-    await expect(
-      cartService.addItem(session.id, product.id, 1),
-    ).rejects.toMatchObject({
-      code: CartErrorCode.PRODUCT_UNAVAILABLE,
-    });
-  });
-
-  it("should reject an archived product", async () => {
-    const { session, store, category } = await createCartContext();
-
-    const product = await createProduct(store.id, category.id, {
-      status: "archived",
-    });
-
-    await expect(
-      cartService.addItem(session.id, product.id, 1),
-    ).rejects.toMatchObject({
-      code: CartErrorCode.PRODUCT_INACTIVE,
-    });
-  });
-
-  it("should reject a product from an inactive store", async () => {
-    const { session, store, category } = await createCartContext();
-
-    await storeRepository.setStatus(store.id, "inactive");
-
-    const product = await createProduct(store.id, category.id);
-
-    await expect(
-      cartService.addItem(session.id, product.id, 1),
-    ).rejects.toMatchObject({
-      code: CartErrorCode.STORE_INACTIVE,
-    });
-  });
-
-  it("should reject an invalid quantity", async () => {
-    const { session, store, category } = await createCartContext();
-
-    const product = await createProduct(store.id, category.id);
-
-    await expect(
-      cartService.addItem(session.id, product.id, 0),
-    ).rejects.toMatchObject({
-      code: "INVALID_QUANTITY",
-    });
-
-    await expect(
-      cartService.addItem(session.id, product.id, -1),
-    ).rejects.toMatchObject({
-      code: "INVALID_QUANTITY",
-    });
-  });
-
-  it("should increase the quantity when adding the same product twice", async () => {
-    const { session, store, category } = await createCartContext();
-
-    const product = await createProduct(store.id, category.id);
-
-    const first = await cartService.addItem(session.id, product.id, 2);
-
-    const second = await cartService.addItem(session.id, product.id, 3);
-
-    expect(first?.id).toBe(second?.id);
-
-    expect(second?.quantity).toBe(5);
-
-    const cart = await cartRepository.findBySessionId(session.id);
-
-    const items = await cartItemRepository.findByCartId(cart!.id);
-
-    expect(items).toHaveLength(1);
-    expect(items[0].quantity).toBe(5);
-  });
-
-  it("should allow multiple products from the same store", async () => {
-    const { session, store, category } = await createCartContext();
-
-    const product1 = await createProduct(store.id, category.id, {
-      name: "Produit 1",
-    });
-
-    const product2 = await createProduct(store.id, category.id, {
-      name: "Produit 2",
-    });
-
-    await cartService.addItem(session.id, product1.id, 1);
-
-    await cartService.addItem(session.id, product2.id, 2);
-
-    const cart = await cartRepository.findBySessionId(session.id);
-
-    const items = await cartItemRepository.findByCartId(cart!.id);
-
-    expect(items).toHaveLength(2);
-  });
-
-  it("should reject products from multiple stores", async () => {
-    const { session, store, category } = await createCartContext();
-
-    const secondUser = await createUser("Second Owner");
-
-    const secondStore = await createStore(secondUser.id, "Deuxième Boutique");
-
-    const firstProduct = await createProduct(store.id, category.id, {
-      name: "Produit Boutique 1",
-    });
-
-    const secondProduct = await createProduct(secondStore.id, category.id, {
-      name: "Produit Boutique 2",
-    });
-
-    await cartService.addItem(session.id, firstProduct.id, 1);
-
-    await expect(
-      cartService.addItem(session.id, secondProduct.id, 1),
-    ).rejects.toMatchObject({
-      code: CartErrorCode.MULTIPLE_STORES,
-    });
-  });
-
-  it("should show an added product as unavailable when it becomes unavailable", async () => {
-    const { session, store, category } = await createCartContext();
-
-    const product = await createProduct(store.id, category.id);
-
-    const item = await cartService.addItem(session.id, product.id, 1);
-
-    expect(item).toBeDefined();
-
-    let cart = await cartService.getCart(session.id);
-
-    expect(cart.items).toHaveLength(1);
-    expect(cart.items[0].state).toBe("available");
-
-    await productRepository.setAvailability(product.id, "unavailable");
-
-    cart = await cartService.getCart(session.id);
-
-    expect(cart.items).toHaveLength(1);
-
-    expect(cart.items[0].product_id).toBe(product.id);
-
-    expect(cart.items[0].quantity).toBe(1);
-
-    expect(cart.items[0].state).toBe("unavailable");
-  });
-
-  it("should show cart items as unavailable when the store becomes inactive", async () => {
-    const { session, store, category } = await createCartContext();
-
-    const product = await createProduct(store.id, category.id);
-
-    await cartService.addItem(session.id, product.id, 2);
-
-    let cart = await cartService.getCart(session.id);
-
-    expect(cart.items[0].state).toBe("available");
-
-    await storeRepository.setStatus(store.id, "inactive");
-
-    cart = await cartService.getCart(session.id);
-
-    expect(cart.items).toHaveLength(1);
-    expect(cart.items[0].state).toBe("unavailable");
-    expect(cart.items[0].quantity).toBe(2);
-  });
-
-  it("should show an archived product as unavailable", async () => {
-    const { session, store, category } = await createCartContext();
-
-    const product = await createProduct(store.id, category.id);
-
-    await cartService.addItem(session.id, product.id, 1);
-
-    await productRepository.setStatus(product.id, "archived");
-
-    const cart = await cartService.getCart(session.id);
-
-    expect(cart.items).toHaveLength(1);
-    expect(cart.items[0].state).toBe("unavailable");
-  });
-
-  it("should become available again when the product becomes available", async () => {
-    const { session, store, category } = await createCartContext();
-
-    const product = await createProduct(store.id, category.id);
-
-    await cartService.addItem(session.id, product.id, 1);
-
-    await productRepository.setAvailability(product.id, "unavailable");
-
-    let cart = await cartService.getCart(session.id);
-
-    expect(cart.items[0].state).toBe("unavailable");
-
-    await productRepository.setAvailability(product.id, "available");
-
-    cart = await cartService.getCart(session.id);
-
-    expect(cart.items[0].state).toBe("available");
-  });
-
-  it("should update an item quantity", async () => {
-    const { session, store, category } = await createCartContext();
-
-    const product = await createProduct(store.id, category.id);
-
-    const item = await cartService.addItem(session.id, product.id, 2);
-
-    const updated = await cartService.updateItemQuantity(
-      session.id,
-      item!.id,
-      7,
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    mocks.cartRepository.findBySessionId.mockResolvedValue(cart);
+    mocks.cartItemRepository.findByCartId.mockResolvedValue([]);
+    mocks.cartItemRepository.findByCartAndProduct.mockResolvedValue(undefined);
+    mocks.cartItemRepository.findById.mockResolvedValue(undefined);
+    mocks.cartItemRepository.findByCartIdWithProductContext.mockResolvedValue(
+      [],
     );
 
-    expect(updated).toBeDefined();
-    expect(updated?.id).toBe(item!.id);
-    expect(updated?.quantity).toBe(7);
+    mocks.productRepository.findById.mockResolvedValue(activeProduct);
+    mocks.storeRepository.findById.mockResolvedValue(activeStore);
+
+    mocks.cartItemRepository.create.mockResolvedValue(cartItem);
+    mocks.cartItemRepository.updateQuantity.mockResolvedValue({
+      ...cartItem,
+      quantity: 5,
+    });
+    mocks.cartItemRepository.delete.mockResolvedValue(1);
+
+    mocks.eventRepository.create.mockResolvedValue({
+      id: "event-1",
+    });
+
+    setupTransaction();
+
+    cartService = new CartService(
+      mocks.database as any,
+      mocks.cartRepository as any,
+      mocks.cartItemRepository as any,
+      mocks.productRepository as any,
+      mocks.storeRepository as any,
+    );
   });
 
-  it("should reject an invalid quantity when updating an item", async () => {
-    const { session, store, category } = await createCartContext();
+  // ---------------------------------------------------------------------------
+  // GET CART
+  // ---------------------------------------------------------------------------
 
-    const product = await createProduct(store.id, category.id);
+  describe("getCart", () => {
+    it("should return the cart", async () => {
+      mocks.cartItemRepository.findByCartIdWithProductContext.mockResolvedValue(
+        [],
+      );
 
-    const item = await cartService.addItem(session.id, product.id, 2);
+      const result = await cartService.getCart(sessionId);
 
-    await expect(
-      cartService.updateItemQuantity(session.id, item!.id, 0),
-    ).rejects.toMatchObject({
-      code: "INVALID_QUANTITY",
+      expect(result).toMatchObject({
+        id: cartId,
+        session_id: sessionId,
+        items: [],
+      });
+
+      expect(mocks.cartRepository.findBySessionId).toHaveBeenCalledWith(
+        sessionId,
+      );
+    });
+
+    it("should reject when the cart does not exist", async () => {
+      mocks.cartRepository.findBySessionId.mockResolvedValue(undefined);
+
+      await expect(cartService.getCart(sessionId)).rejects.toMatchObject({
+        code: CartErrorCode.CART_NOT_FOUND,
+      });
+    });
+
+    it("should load all cart items with product and store context", async () => {
+      const contextItem = makeContextItem();
+
+      mocks.cartItemRepository.findByCartIdWithProductContext.mockResolvedValue(
+        [contextItem],
+      );
+
+      await cartService.getCart(sessionId);
+
+      expect(
+        mocks.cartItemRepository.findByCartIdWithProductContext,
+      ).toHaveBeenCalledWith(cartId);
+    });
+
+    it("should mark an item as available when store and product are active and product is available", async () => {
+      mocks.cartItemRepository.findByCartIdWithProductContext.mockResolvedValue(
+        [makeContextItem()],
+      );
+
+      const result = await cartService.getCart(sessionId);
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0]).toMatchObject({
+        id: itemId,
+        cart_id: cartId,
+        product_id: productId,
+        quantity: 2,
+        state: "available",
+      });
+    });
+
+    it("should mark an item unavailable when the store is inactive", async () => {
+      mocks.cartItemRepository.findByCartIdWithProductContext.mockResolvedValue(
+        [
+          makeContextItem({
+            store_status: "inactive",
+          }),
+        ],
+      );
+
+      const result = await cartService.getCart(sessionId);
+
+      expect(result.items[0].state).toBe("unavailable");
+    });
+
+    it("should mark an item unavailable when the product is archived", async () => {
+      mocks.cartItemRepository.findByCartIdWithProductContext.mockResolvedValue(
+        [
+          makeContextItem({
+            product_status: "archived",
+          }),
+        ],
+      );
+
+      const result = await cartService.getCart(sessionId);
+
+      expect(result.items[0].state).toBe("unavailable");
+    });
+
+    it("should mark an item unavailable when the product is unavailable", async () => {
+      mocks.cartItemRepository.findByCartIdWithProductContext.mockResolvedValue(
+        [
+          makeContextItem({
+            product_availability: "unavailable",
+          }),
+        ],
+      );
+
+      const result = await cartService.getCart(sessionId);
+
+      expect(result.items[0].state).toBe("unavailable");
+    });
+
+    it("should preserve the item quantity", async () => {
+      mocks.cartItemRepository.findByCartIdWithProductContext.mockResolvedValue(
+        [
+          makeContextItem({
+            quantity: 7,
+          }),
+        ],
+      );
+
+      const result = await cartService.getCart(sessionId);
+
+      expect(result.items[0].quantity).toBe(7);
+    });
+
+    it("should return multiple items with independent states", async () => {
+      const secondProductId = "product-2";
+
+      mocks.cartItemRepository.findByCartIdWithProductContext.mockResolvedValue(
+        [
+          makeContextItem({
+            id: "item-1",
+            product_id: productId,
+            state: undefined as never,
+          }),
+          makeContextItem({
+            id: "item-2",
+            product_id: secondProductId,
+            product_availability: "unavailable",
+          }),
+        ],
+      );
+
+      const result = await cartService.getCart(sessionId);
+
+      expect(result.items).toHaveLength(2);
+      expect(result.items[0].state).toBe("available");
+      expect(result.items[1].state).toBe("unavailable");
     });
   });
 
-  it("should reject updating an item belonging to another cart", async () => {
-    const first = await createCartContext();
+  // ---------------------------------------------------------------------------
+  // ADD ITEM
+  // ---------------------------------------------------------------------------
 
-    const second = await createCartContext();
+  describe("addItem", () => {
+    it("should add a valid product to the cart", async () => {
+      setupActiveProduct();
 
-    const product = await createProduct(first.store.id, first.category.id);
+      const result = await cartService.addItem(sessionId, productId, 2);
 
-    const item = await cartService.addItem(first.session.id, product.id, 1);
+      expect(result).toEqual(cartItem);
 
-    await expect(
-      cartService.updateItemQuantity(second.session.id, item!.id, 5),
-    ).rejects.toMatchObject({
-      code: CartErrorCode.ITEM_NOT_FOUND,
+      expect(mocks.cartItemRepository.create).toHaveBeenCalledWith({
+        cart_id: cartId,
+        product_id: productId,
+        quantity: 2,
+      });
+    });
+
+    it("should reject a quantity equal to zero", async () => {
+      await expect(
+        cartService.addItem(sessionId, productId, 0),
+      ).rejects.toMatchObject({
+        code: "INVALID_QUANTITY",
+      });
+    });
+
+    it("should reject a negative quantity", async () => {
+      await expect(
+        cartService.addItem(sessionId, productId, -1),
+      ).rejects.toMatchObject({
+        code: "INVALID_QUANTITY",
+      });
+    });
+
+    it("should reject a non-integer quantity", async () => {
+      await expect(
+        cartService.addItem(sessionId, productId, 1.5),
+      ).rejects.toMatchObject({
+        code: "INVALID_QUANTITY",
+      });
+    });
+
+    it("should reject NaN as a quantity", async () => {
+      await expect(
+        cartService.addItem(sessionId, productId, Number.NaN),
+      ).rejects.toMatchObject({
+        code: "INVALID_QUANTITY",
+      });
+    });
+
+    it("should reject Infinity as a quantity", async () => {
+      await expect(
+        cartService.addItem(sessionId, productId, Infinity),
+      ).rejects.toMatchObject({
+        code: "INVALID_QUANTITY",
+      });
+    });
+
+    it("should reject when the cart does not exist", async () => {
+      mocks.cartRepository.findBySessionId.mockResolvedValue(undefined);
+
+      await expect(
+        cartService.addItem(sessionId, productId, 1),
+      ).rejects.toMatchObject({
+        code: CartErrorCode.CART_NOT_FOUND,
+      });
+    });
+
+    it("should reject when the product does not exist", async () => {
+      mocks.productRepository.findById.mockResolvedValue(undefined);
+
+      await expect(
+        cartService.addItem(sessionId, productId, 1),
+      ).rejects.toMatchObject({
+        code: CartErrorCode.PRODUCT_NOT_FOUND,
+      });
+    });
+
+    it("should reject when the store does not exist", async () => {
+      mocks.storeRepository.findById.mockResolvedValue(undefined);
+
+      await expect(
+        cartService.addItem(sessionId, productId, 1),
+      ).rejects.toMatchObject({
+        code: CartErrorCode.STORE_NOT_FOUND,
+      });
+    });
+
+    it("should reject when the store is inactive", async () => {
+      mocks.storeRepository.findById.mockResolvedValue(inactiveStore);
+
+      await expect(
+        cartService.addItem(sessionId, productId, 1),
+      ).rejects.toMatchObject({
+        code: CartErrorCode.STORE_INACTIVE,
+      });
+    });
+
+    it("should reject when the product is archived", async () => {
+      mocks.productRepository.findById.mockResolvedValue(archivedProduct);
+
+      await expect(
+        cartService.addItem(sessionId, productId, 1),
+      ).rejects.toMatchObject({
+        code: CartErrorCode.PRODUCT_INACTIVE,
+      });
+    });
+
+    it("should reject when the product is unavailable", async () => {
+      mocks.productRepository.findById.mockResolvedValue(unavailableProduct);
+
+      await expect(
+        cartService.addItem(sessionId, productId, 1),
+      ).rejects.toMatchObject({
+        code: CartErrorCode.PRODUCT_UNAVAILABLE,
+      });
+    });
+
+    it("should create a new item when the product is not already in the cart", async () => {
+      setupActiveProduct();
+
+      mocks.cartItemRepository.findByCartId.mockResolvedValue([]);
+      mocks.cartItemRepository.findByCartAndProduct.mockResolvedValue(
+        undefined,
+      );
+
+      await cartService.addItem(sessionId, productId, 3);
+
+      expect(mocks.cartItemRepository.create).toHaveBeenCalledWith({
+        cart_id: cartId,
+        product_id: productId,
+        quantity: 3,
+      });
+    });
+
+    it("should increase the quantity when the product already exists in the cart", async () => {
+      setupActiveProduct();
+
+      const existingItem = {
+        ...cartItem,
+        quantity: 4,
+      };
+
+      mocks.cartItemRepository.findByCartId.mockResolvedValue([existingItem]);
+
+      mocks.cartItemRepository.findByCartAndProduct.mockResolvedValue(
+        existingItem,
+      );
+
+      await cartService.addItem(sessionId, productId, 3);
+
+      expect(mocks.cartItemRepository.updateQuantity).toHaveBeenCalledWith(
+        existingItem.id,
+        {
+          quantity: 7,
+        },
+      );
+    });
+
+    it("should not create a duplicate item when the product already exists", async () => {
+      setupActiveProduct();
+
+      const existingItem = {
+        ...cartItem,
+        quantity: 4,
+      };
+
+      mocks.cartItemRepository.findByCartId.mockResolvedValue([existingItem]);
+
+      mocks.cartItemRepository.findByCartAndProduct.mockResolvedValue(
+        existingItem,
+      );
+
+      await cartService.addItem(sessionId, productId, 2);
+
+      expect(mocks.cartItemRepository.create).not.toHaveBeenCalled();
+    });
+
+    it("should reject products from another store", async () => {
+      setupActiveProduct();
+
+      const firstItem = {
+        ...cartItem,
+        product_id: "product-from-first-store",
+      };
+
+      const firstStoreProduct = {
+        ...activeProduct,
+        id: "product-from-first-store",
+        store_id: "store-1",
+      };
+
+      const secondStoreProduct = {
+        ...activeProduct,
+        id: productId,
+        store_id: "store-2",
+      };
+
+      mocks.cartItemRepository.findByCartId.mockResolvedValue([firstItem]);
+
+      mocks.productRepository.findById.mockImplementation(
+        async (id: string) => {
+          if (id === firstItem.product_id) {
+            return firstStoreProduct;
+          }
+
+          if (id === productId) {
+            return secondStoreProduct;
+          }
+
+          return undefined;
+        },
+      );
+
+      await expect(
+        cartService.addItem(sessionId, productId, 1),
+      ).rejects.toMatchObject({
+        code: CartErrorCode.MULTIPLE_STORES,
+      });
+    });
+
+    it("should allow another product from the same store", async () => {
+      setupActiveProduct();
+
+      const secondProduct = {
+        ...activeProduct,
+        id: "product-2",
+        name: "Deuxième produit",
+      };
+
+      const firstItem = {
+        ...cartItem,
+        product_id: productId,
+      };
+
+      mocks.cartItemRepository.findByCartId.mockResolvedValue([firstItem]);
+
+      mocks.cartItemRepository.findByCartAndProduct.mockResolvedValue(
+        undefined,
+      );
+
+      mocks.productRepository.findById.mockImplementation(
+        async (id: string) => {
+          if (id === "product-2") {
+            return secondProduct;
+          }
+
+          return activeProduct;
+        },
+      );
+
+      await cartService.addItem(sessionId, "product-2", 1);
+
+      expect(mocks.cartItemRepository.create).toHaveBeenCalledWith({
+        cart_id: cartId,
+        product_id: "product-2",
+        quantity: 1,
+      });
+    });
+
+    // -------------------------------------------------------------------------
+    // ADD ITEM EVENTS
+    // -------------------------------------------------------------------------
+
+    it("should create a cart.item_added event", async () => {
+      setupActiveProduct();
+
+      await cartService.addItem(sessionId, productId, 2);
+
+      expect(mocks.eventRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event_name: "cart.item_added",
+          session_id: sessionId,
+          user_id: null,
+          store_id: storeId,
+          product_id: productId,
+          metadata: expect.objectContaining({
+            quantity: 2,
+          }),
+        }),
+      );
+    });
+
+    it("should create the cart.item_added event with the cart id in the event key", async () => {
+      setupActiveProduct();
+
+      await cartService.addItem(sessionId, productId, 2);
+
+      expect(mocks.eventRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event_key: expect.stringContaining(`cart:${cartId}:`),
+        }),
+      );
+    });
+
+    it("should create the cart item and event inside the same transaction", async () => {
+      setupActiveProduct();
+
+      const executionOrder: string[] = [];
+
+      mocks.cartItemRepository.create.mockImplementation(async () => {
+        executionOrder.push("item");
+        return cartItem;
+      });
+
+      mocks.eventRepository.create.mockImplementation(async () => {
+        executionOrder.push("event");
+        return { id: "event-1" };
+      });
+
+      await cartService.addItem(sessionId, productId, 2);
+
+      expect(mocks.database.transaction).toHaveBeenCalledTimes(1);
+      expect(executionOrder).toEqual(["item", "event"]);
+    });
+
+    it("should not create the event when item creation fails", async () => {
+      setupActiveProduct();
+
+      mocks.cartItemRepository.create.mockRejectedValueOnce(
+        new Error("item creation failed"),
+      );
+
+      await expect(
+        cartService.addItem(sessionId, productId, 1),
+      ).rejects.toThrow("item creation failed");
+
+      expect(mocks.eventRepository.create).not.toHaveBeenCalled();
+    });
+
+    it("should propagate event creation errors", async () => {
+      setupActiveProduct();
+
+      mocks.eventRepository.create.mockRejectedValueOnce(
+        new Error("event creation failed"),
+      );
+
+      await expect(
+        cartService.addItem(sessionId, productId, 1),
+      ).rejects.toThrow("event creation failed");
     });
   });
 
-  it("should remove an item from the cart", async () => {
-    const { session, store, category } = await createCartContext();
+  // ---------------------------------------------------------------------------
+  // UPDATE QUANTITY
+  // ---------------------------------------------------------------------------
 
-    const product = await createProduct(store.id, category.id);
+  describe("updateItemQuantity", () => {
+    it("should update an item quantity", async () => {
+      mocks.cartItemRepository.findById.mockResolvedValue(cartItem);
 
-    const item = await cartService.addItem(session.id, product.id, 1);
+      const result = await cartService.updateItemQuantity(sessionId, itemId, 7);
 
-    await cartService.removeItem(session.id, item!.id);
+      expect(result).toMatchObject({
+        id: itemId,
+        quantity: 5,
+      });
 
-    const cart = await cartRepository.findBySessionId(session.id);
+      expect(mocks.cartItemRepository.updateQuantity).toHaveBeenCalledWith(
+        itemId,
+        {
+          quantity: 7,
+        },
+      );
+    });
 
-    const items = await cartItemRepository.findByCartId(cart!.id);
+    it("should reject a quantity equal to zero", async () => {
+      await expect(
+        cartService.updateItemQuantity(sessionId, itemId, 0),
+      ).rejects.toMatchObject({
+        code: "INVALID_QUANTITY",
+      });
+    });
 
-    expect(items).toHaveLength(0);
-  });
+    it("should reject a negative quantity", async () => {
+      await expect(
+        cartService.updateItemQuantity(sessionId, itemId, -2),
+      ).rejects.toMatchObject({
+        code: "INVALID_QUANTITY",
+      });
+    });
 
-  it("should reject removing an item belonging to another cart", async () => {
-    const first = await createCartContext();
+    it("should reject a non-integer quantity", async () => {
+      await expect(
+        cartService.updateItemQuantity(sessionId, itemId, 2.5),
+      ).rejects.toMatchObject({
+        code: "INVALID_QUANTITY",
+      });
+    });
 
-    const second = await createCartContext();
+    it("should reject NaN as a quantity", async () => {
+      await expect(
+        cartService.updateItemQuantity(sessionId, itemId, Number.NaN),
+      ).rejects.toMatchObject({
+        code: "INVALID_QUANTITY",
+      });
+    });
 
-    const product = await createProduct(first.store.id, first.category.id);
+    it("should reject Infinity as a quantity", async () => {
+      await expect(
+        cartService.updateItemQuantity(sessionId, itemId, Infinity),
+      ).rejects.toMatchObject({
+        code: "INVALID_QUANTITY",
+      });
+    });
 
-    const item = await cartService.addItem(first.session.id, product.id, 1);
+    it("should reject when the cart does not exist", async () => {
+      mocks.cartRepository.findBySessionId.mockResolvedValue(undefined);
 
-    await expect(
-      cartService.removeItem(second.session.id, item!.id),
-    ).rejects.toMatchObject({
-      code: CartErrorCode.ITEM_NOT_FOUND,
+      await expect(
+        cartService.updateItemQuantity(sessionId, itemId, 2),
+      ).rejects.toMatchObject({
+        code: CartErrorCode.CART_NOT_FOUND,
+      });
+    });
+
+    it("should reject when the item does not exist", async () => {
+      mocks.cartItemRepository.findById.mockResolvedValue(undefined);
+
+      await expect(
+        cartService.updateItemQuantity(sessionId, itemId, 2),
+      ).rejects.toMatchObject({
+        code: CartErrorCode.ITEM_NOT_FOUND,
+      });
+    });
+
+    it("should reject an item belonging to another cart", async () => {
+      mocks.cartItemRepository.findById.mockResolvedValue({
+        ...cartItem,
+        cart_id: "another-cart",
+      });
+
+      await expect(
+        cartService.updateItemQuantity(sessionId, itemId, 2),
+      ).rejects.toMatchObject({
+        code: CartErrorCode.ITEM_NOT_FOUND,
+      });
+    });
+
+    // -------------------------------------------------------------------------
+    // UPDATE EVENTS
+    // -------------------------------------------------------------------------
+
+    it("should create a cart.item_quantity_updated event", async () => {
+      mocks.cartItemRepository.findById.mockResolvedValue({
+        ...cartItem,
+        quantity: 3,
+      });
+
+      await cartService.updateItemQuantity(sessionId, itemId, 7);
+
+      expect(mocks.eventRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event_name: "cart.item_quantity_updated",
+          session_id: sessionId,
+          user_id: null,
+          store_id: storeId,
+          product_id: productId,
+          metadata: expect.objectContaining({
+            from_quantity: 3,
+            to_quantity: 7,
+          }),
+        }),
+      );
+    });
+
+    it("should include the cart id in the quantity update event key", async () => {
+      mocks.cartItemRepository.findById.mockResolvedValue(cartItem);
+
+      await cartService.updateItemQuantity(sessionId, itemId, 7);
+
+      expect(mocks.eventRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event_key: expect.stringContaining(`cart:${cartId}:`),
+        }),
+      );
+    });
+
+    it("should update the item and create the event inside the same transaction", async () => {
+      mocks.cartItemRepository.findById.mockResolvedValue({
+        ...cartItem,
+        quantity: 3,
+      });
+
+      const executionOrder: string[] = [];
+
+      mocks.cartItemRepository.updateQuantity.mockImplementation(async () => {
+        executionOrder.push("item");
+        return {
+          ...cartItem,
+          quantity: 7,
+        };
+      });
+
+      mocks.eventRepository.create.mockImplementation(async () => {
+        executionOrder.push("event");
+        return { id: "event-1" };
+      });
+
+      await cartService.updateItemQuantity(sessionId, itemId, 7);
+
+      expect(mocks.database.transaction).toHaveBeenCalledTimes(1);
+      expect(executionOrder).toEqual(["item", "event"]);
+    });
+
+    it("should not create an event when quantity update fails", async () => {
+      mocks.cartItemRepository.findById.mockResolvedValue(cartItem);
+
+      mocks.cartItemRepository.updateQuantity.mockRejectedValueOnce(
+        new Error("update failed"),
+      );
+
+      await expect(
+        cartService.updateItemQuantity(sessionId, itemId, 7),
+      ).rejects.toThrow("update failed");
+
+      expect(mocks.eventRepository.create).not.toHaveBeenCalled();
+    });
+
+    it("should propagate event creation errors during quantity update", async () => {
+      mocks.cartItemRepository.findById.mockResolvedValue(cartItem);
+
+      mocks.eventRepository.create.mockRejectedValueOnce(
+        new Error("event creation failed"),
+      );
+
+      await expect(
+        cartService.updateItemQuantity(sessionId, itemId, 7),
+      ).rejects.toThrow("event creation failed");
     });
   });
 
-  it("should reject operations on a nonexistent cart", async () => {
-    const fakeSessionId = "00000000-0000-0000-0000-000000000000";
+  // ---------------------------------------------------------------------------
+  // REMOVE ITEM
+  // ---------------------------------------------------------------------------
 
-    await expect(cartService.getCart(fakeSessionId)).rejects.toMatchObject({
-      code: CartErrorCode.CART_NOT_FOUND,
+  describe("removeItem", () => {
+    it("should remove an item from the cart", async () => {
+      mocks.cartItemRepository.findById.mockResolvedValue(cartItem);
+
+      await cartService.removeItem(sessionId, itemId);
+
+      expect(mocks.cartItemRepository.delete).toHaveBeenCalledWith(itemId);
     });
 
-    await expect(
-      cartService.addItem(fakeSessionId, fakeSessionId, 1),
-    ).rejects.toMatchObject({
-      code: CartErrorCode.CART_NOT_FOUND,
+    it("should reject when the cart does not exist", async () => {
+      mocks.cartRepository.findBySessionId.mockResolvedValue(undefined);
+
+      await expect(
+        cartService.removeItem(sessionId, itemId),
+      ).rejects.toMatchObject({
+        code: CartErrorCode.CART_NOT_FOUND,
+      });
+    });
+
+    it("should reject when the item does not exist", async () => {
+      mocks.cartItemRepository.findById.mockResolvedValue(undefined);
+
+      await expect(
+        cartService.removeItem(sessionId, itemId),
+      ).rejects.toMatchObject({
+        code: CartErrorCode.ITEM_NOT_FOUND,
+      });
+    });
+
+    it("should reject an item belonging to another cart", async () => {
+      mocks.cartItemRepository.findById.mockResolvedValue({
+        ...cartItem,
+        cart_id: "another-cart",
+      });
+
+      await expect(
+        cartService.removeItem(sessionId, itemId),
+      ).rejects.toMatchObject({
+        code: CartErrorCode.ITEM_NOT_FOUND,
+      });
+    });
+
+    // -------------------------------------------------------------------------
+    // REMOVE EVENTS
+    // -------------------------------------------------------------------------
+
+    it("should create a cart.item_removed event", async () => {
+      mocks.cartItemRepository.findById.mockResolvedValue(cartItem);
+
+      await cartService.removeItem(sessionId, itemId);
+
+      expect(mocks.eventRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event_name: "cart.item_removed",
+          session_id: sessionId,
+          user_id: null,
+          store_id: storeId,
+          product_id: productId,
+          metadata: expect.objectContaining({
+            quantity: 2,
+          }),
+        }),
+      );
+    });
+
+    it("should include the cart id in the removal event key", async () => {
+      mocks.cartItemRepository.findById.mockResolvedValue(cartItem);
+
+      await cartService.removeItem(sessionId, itemId);
+
+      expect(mocks.eventRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event_key: expect.stringContaining(`cart:${cartId}:`),
+        }),
+      );
+    });
+
+    it("should delete the item and create the event inside the same transaction", async () => {
+      mocks.cartItemRepository.findById.mockResolvedValue(cartItem);
+
+      const executionOrder: string[] = [];
+
+      mocks.cartItemRepository.delete.mockImplementation(async () => {
+        executionOrder.push("item");
+        return 1;
+      });
+
+      mocks.eventRepository.create.mockImplementation(async () => {
+        executionOrder.push("event");
+        return { id: "event-1" };
+      });
+
+      await cartService.removeItem(sessionId, itemId);
+
+      expect(mocks.database.transaction).toHaveBeenCalledTimes(1);
+      expect(executionOrder).toEqual(["item", "event"]);
+    });
+
+    it("should not create an event when item deletion fails", async () => {
+      mocks.cartItemRepository.findById.mockResolvedValue(cartItem);
+
+      mocks.cartItemRepository.delete.mockRejectedValueOnce(
+        new Error("delete failed"),
+      );
+
+      await expect(cartService.removeItem(sessionId, itemId)).rejects.toThrow(
+        "delete failed",
+      );
+
+      expect(mocks.eventRepository.create).not.toHaveBeenCalled();
+    });
+
+    it("should propagate event creation errors during removal", async () => {
+      mocks.cartItemRepository.findById.mockResolvedValue(cartItem);
+
+      mocks.eventRepository.create.mockRejectedValueOnce(
+        new Error("event creation failed"),
+      );
+
+      await expect(cartService.removeItem(sessionId, itemId)).rejects.toThrow(
+        "event creation failed",
+      );
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // EVENT CONTEXT
+  // ---------------------------------------------------------------------------
+
+  describe("business event context", () => {
+    it("should associate cart events with the buyer session", async () => {
+      setupActiveProduct();
+
+      await cartService.addItem("session-specific", productId, 1);
+
+      expect(mocks.eventRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          session_id: "session-specific",
+        }),
+      );
+    });
+
+    it("should use null as user_id for anonymous cart actions", async () => {
+      setupActiveProduct();
+
+      await cartService.addItem(sessionId, productId, 1);
+
+      expect(mocks.eventRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          user_id: null,
+        }),
+      );
+    });
+
+    it("should associate add events with the product store", async () => {
+      setupActiveProduct();
+
+      await cartService.addItem(sessionId, productId, 1);
+
+      expect(mocks.eventRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          store_id: storeId,
+          product_id: productId,
+        }),
+      );
+    });
+
+    it("should not create any event when addItem validation fails", async () => {
+      mocks.productRepository.findById.mockResolvedValue(undefined);
+
+      await expect(
+        cartService.addItem(sessionId, productId, 1),
+      ).rejects.toMatchObject({
+        code: CartErrorCode.PRODUCT_NOT_FOUND,
+      });
+
+      expect(mocks.eventRepository.create).not.toHaveBeenCalled();
+    });
+
+    it("should not create any event when the cart does not exist", async () => {
+      mocks.cartRepository.findBySessionId.mockResolvedValue(undefined);
+
+      await expect(
+        cartService.addItem(sessionId, productId, 1),
+      ).rejects.toMatchObject({
+        code: CartErrorCode.CART_NOT_FOUND,
+      });
+
+      expect(mocks.eventRepository.create).not.toHaveBeenCalled();
+    });
+
+    it("should not create any event when updating an invalid item", async () => {
+      mocks.cartItemRepository.findById.mockResolvedValue(undefined);
+
+      await expect(
+        cartService.updateItemQuantity(sessionId, itemId, 4),
+      ).rejects.toMatchObject({
+        code: CartErrorCode.ITEM_NOT_FOUND,
+      });
+
+      expect(mocks.eventRepository.create).not.toHaveBeenCalled();
+    });
+
+    it("should not create any event when removing an invalid item", async () => {
+      mocks.cartItemRepository.findById.mockResolvedValue(undefined);
+
+      await expect(
+        cartService.removeItem(sessionId, itemId),
+      ).rejects.toMatchObject({
+        code: CartErrorCode.ITEM_NOT_FOUND,
+      });
+
+      expect(mocks.eventRepository.create).not.toHaveBeenCalled();
     });
   });
 });

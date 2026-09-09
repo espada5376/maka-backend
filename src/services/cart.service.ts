@@ -3,12 +3,10 @@ import { Knex } from "knex";
 import db from "../database/knex.js";
 
 import { CartRepository } from "../database/repositories/cart.repository.js";
-
 import { CartItemRepository } from "../database/repositories/cart-item.repository.js";
-
 import { ProductRepository } from "../database/repositories/product.repository.js";
-
 import { StoreRepository } from "../database/repositories/store.repository.js";
+import { EventRepository } from "../database/repositories/event.repository.js";
 
 export type CartItemState = "available" | "unavailable";
 
@@ -32,7 +30,6 @@ export class CartServiceError extends Error {
     message: string,
   ) {
     super(message);
-
     this.name = "CartServiceError";
   }
 }
@@ -46,6 +43,7 @@ export const CartErrorCode = {
   PRODUCT_UNAVAILABLE: "PRODUCT_UNAVAILABLE",
   MULTIPLE_STORES: "MULTIPLE_STORES",
   ITEM_NOT_FOUND: "ITEM_NOT_FOUND",
+  INVALID_QUANTITY: "INVALID_QUANTITY",
 } as const;
 
 export class CartService {
@@ -55,6 +53,7 @@ export class CartService {
     private readonly cartItemRepository = new CartItemRepository(database),
     private readonly productRepository = new ProductRepository(database),
     private readonly storeRepository = new StoreRepository(database),
+    private readonly eventRepository = new EventRepository(database),
   ) {}
 
   async getCart(sessionId: string): Promise<CartView> {
@@ -82,7 +81,7 @@ export class CartService {
         cart_id: item.cart_id,
         product_id: item.product_id,
         quantity: item.quantity,
-        state: available ? ("available" as const) : ("unavailable" as const),
+        state: available ? "available" : "unavailable",
       };
     });
 
@@ -94,12 +93,7 @@ export class CartService {
   }
 
   async addItem(sessionId: string, productId: string, quantity: number) {
-    if (quantity <= 0) {
-      throw new CartServiceError(
-        "INVALID_QUANTITY",
-        "Quantity must be greater than zero",
-      );
-    }
+    this.validateQuantity(quantity);
 
     const cart = await this.cartRepository.findBySessionId(sessionId);
 
@@ -151,9 +145,15 @@ export class CartService {
 
     const existingItems = await this.cartItemRepository.findByCartId(cart.id);
 
-    if (existingItems.length > 0) {
+    /*
+     * A cart can only contain products from one store.
+     *
+     * We verify every existing item rather than only the first one.
+     */
+
+    for (const existingItem of existingItems) {
       const existingProduct = await this.productRepository.findById(
-        existingItems[0].product_id,
+        existingItem.product_id,
       );
 
       if (existingProduct && existingProduct.store_id !== product.store_id) {
@@ -169,16 +169,46 @@ export class CartService {
       product.id,
     );
 
-    if (existingItem) {
-      return this.cartItemRepository.updateQuantity(existingItem.id, {
-        quantity: existingItem.quantity + quantity,
-      });
-    }
+    return this.database.transaction(async (trx) => {
+      /*
+       * Repositories used for mutations are bound to the transaction.
+       */
+      const transactionCartItemRepository = new CartItemRepository(trx);
 
-    return this.cartItemRepository.create({
-      cart_id: cart.id,
-      product_id: product.id,
-      quantity,
+      const transactionEventRepository = new EventRepository(trx);
+
+      let item;
+
+      if (existingItem) {
+        item = await transactionCartItemRepository.updateQuantity(
+          existingItem.id,
+          {
+            quantity: existingItem.quantity + quantity,
+          },
+        );
+      } else {
+        item = await transactionCartItemRepository.create({
+          cart_id: cart.id,
+          product_id: product.id,
+          quantity,
+        });
+      }
+
+      await transactionEventRepository.create({
+        event_name: "cart.item_added",
+        event_key: `cart:${cart.id}:item:${item.id}:added`,
+        session_id: sessionId,
+        user_id: null,
+        store_id: product.store_id,
+        product_id: product.id,
+        metadata: {
+          cart_id: cart.id,
+          item_id: item.id,
+          quantity,
+        },
+      });
+
+      return item;
     });
   }
 
@@ -187,12 +217,7 @@ export class CartService {
     itemId: string,
     quantity: number,
   ) {
-    if (quantity <= 0) {
-      throw new CartServiceError(
-        "INVALID_QUANTITY",
-        "Quantity must be greater than zero",
-      );
-    }
+    this.validateQuantity(quantity);
 
     const cart = await this.cartRepository.findBySessionId(sessionId);
 
@@ -212,10 +237,48 @@ export class CartService {
       );
     }
 
-    return this.cartItemRepository.updateQuantity(item.id, {
-      quantity,
+    const itemProduct = await this.productRepository.findById(item.product_id);
+
+    if (!itemProduct) {
+      throw new CartServiceError(
+        CartErrorCode.PRODUCT_NOT_FOUND,
+        "Product not found",
+      );
+    }
+
+    const previousQuantity = item.quantity;
+
+    return this.database.transaction(async (trx) => {
+      const transactionCartItemRepository = new CartItemRepository(trx);
+
+      const transactionEventRepository = new EventRepository(trx);
+
+      const updatedItem = await transactionCartItemRepository.updateQuantity(
+        item.id,
+        {
+          quantity,
+        },
+      );
+
+      await transactionEventRepository.create({
+        event_name: "cart.item_quantity_updated",
+        event_key: `cart:${cart.id}:item:${item.id}:quantity-updated`,
+        session_id: sessionId,
+        user_id: null,
+        store_id: itemProduct.store_id,
+        product_id: item.product_id,
+        metadata: {
+          cart_id: cart.id,
+          item_id: item.id,
+          from_quantity: previousQuantity,
+          to_quantity: quantity,
+        },
+      });
+
+      return updatedItem;
     });
   }
+
   async removeItem(sessionId: string, itemId: string): Promise<void> {
     const cart = await this.cartRepository.findBySessionId(sessionId);
 
@@ -235,6 +298,50 @@ export class CartService {
       );
     }
 
-    await this.cartItemRepository.delete(item.id);
+    const itemProduct = await this.productRepository.findById(item.product_id);
+
+    if (!itemProduct) {
+      throw new CartServiceError(
+        CartErrorCode.PRODUCT_NOT_FOUND,
+        "Product not found",
+      );
+    }
+
+    await this.database.transaction(async (trx) => {
+      const transactionCartItemRepository = new CartItemRepository(trx);
+
+      const transactionEventRepository = new EventRepository(trx);
+
+      await transactionCartItemRepository.delete(item.id);
+
+      await transactionEventRepository.create({
+        event_name: "cart.item_removed",
+        event_key: `cart:${cart.id}:item:${item.id}:removed`,
+        session_id: sessionId,
+        user_id: null,
+        store_id: itemProduct.store_id,
+        product_id: item.product_id,
+        metadata: {
+          cart_id: cart.id,
+          item_id: item.id,
+          product_id: item.product_id,
+          quantity: item.quantity,
+        },
+      });
+    });
+  }
+
+  private validateQuantity(quantity: number): void {
+    if (
+      typeof quantity !== "number" ||
+      !Number.isInteger(quantity) ||
+      !Number.isFinite(quantity) ||
+      quantity <= 0
+    ) {
+      throw new CartServiceError(
+        CartErrorCode.INVALID_QUANTITY,
+        "Quantity must be a positive integer",
+      );
+    }
   }
 }
