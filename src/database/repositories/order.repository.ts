@@ -1,4 +1,6 @@
+
 import { Knex } from "knex";
+
 import db from "../knex.js";
 
 export type OrderStatus =
@@ -117,7 +119,7 @@ export class OrderRepository {
         buyer_user_id: data.buyer_user_id ?? null,
         session_id: data.session_id,
         status: data.status ?? "pending",
-        total_amount: data.total_amount,
+        total_amount: data.total_amount.toFixed(2),
         currency: data.currency,
         buyer_phone: data.buyer_phone,
         delivery_country: data.delivery_country,
@@ -152,15 +154,41 @@ export class OrderRepository {
       .orderBy("created_at", "asc");
   }
 
+  async findItemsByProductId(productId: string): Promise<OrderItem[]> {
+    return this.database<OrderItem>("order_items")
+      .where({
+        product_id: productId,
+      })
+      .orderBy("created_at", "desc");
+  }
+
+  async findItemsByStoreId(storeId: string): Promise<OrderItem[]> {
+    return this.database<OrderItem>("order_items")
+      .join(
+        "orders",
+        "order_items.order_id",
+        "orders.id",
+      )
+      .where(
+        "orders.store_id",
+        storeId,
+      )
+      .select("order_items.*")
+      .orderBy(
+        "order_items.created_at",
+        "desc",
+      );
+  }
+
   async createItem(data: CreateOrderItemData): Promise<OrderItem> {
     const [item] = await this.database<OrderItem>("order_items")
       .insert({
         order_id: data.order_id,
         product_id: data.product_id,
         product_name: data.product_name,
-        unit_price: data.unit_price,
+        unit_price: data.unit_price.toFixed(2),
         quantity: data.quantity,
-        subtotal: data.subtotal,
+        subtotal: data.subtotal.toFixed(2),
       })
       .returning("*");
 
@@ -172,6 +200,17 @@ export class OrderRepository {
       return [];
     }
 
-    return this.database<OrderItem>("order_items").insert(items).returning("*");
+    const dbItems = items.map((item) => ({
+      order_id: item.order_id,
+      product_id: item.product_id,
+      product_name: item.product_name,
+      unit_price: item.unit_price.toFixed(2),
+      quantity: item.quantity,
+      subtotal: item.subtotal.toFixed(2),
+    }));
+
+    return this.database<OrderItem>("order_items")
+      .insert(dbItems)
+      .returning("*");
   }
 }

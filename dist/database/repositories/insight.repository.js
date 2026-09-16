@@ -5,7 +5,9 @@ export class InsightRepository {
         this.database = database;
     }
     async findById(id) {
-        return this.database("insights").where({ id }).first();
+        return this.database("insights")
+            .where({ id })
+            .first();
     }
     async findByStoreId(storeId) {
         return this.database("insights")
@@ -27,7 +29,7 @@ export class InsightRepository {
             type: data.type,
             title: data.title,
             description: data.description,
-            confidence: data.confidence,
+            confidence: data.confidence.toFixed(4),
             data: data.data ?? {},
             status: data.status ?? "active",
         })
@@ -35,9 +37,19 @@ export class InsightRepository {
         return insight;
     }
     async update(id, data) {
+        const updateData = {
+            type: data.type,
+            title: data.title,
+            description: data.description,
+            data: data.data,
+            status: data.status,
+        };
+        if (data.confidence !== undefined) {
+            updateData.confidence = data.confidence.toFixed(4);
+        }
         const [insight] = await this.database("insights")
             .where({ id })
-            .update(data)
+            .update(updateData)
             .returning("*");
         return insight;
     }
@@ -49,6 +61,8 @@ export class InsightRepository {
         return insight;
     }
     async delete(id) {
-        return this.database("insights").where({ id }).del();
+        return this.database("insights")
+            .where({ id })
+            .del();
     }
 }

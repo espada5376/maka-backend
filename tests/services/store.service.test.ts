@@ -1,1189 +1,1051 @@
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Knex } from "knex";
 
-const mocks = vi.hoisted(() => ({
-  database: {
-    transaction: vi.fn(),
-  },
-
-  productRepository: {
-    findById: vi.fn(),
-    findByStoreId: vi.fn(),
-    findByCategoryId: vi.fn(),
-    findAvailableByStoreId: vi.fn(),
-    create: vi.fn(),
-    update: vi.fn(),
-    setAvailability: vi.fn(),
-    setStatus: vi.fn(),
-  },
-
-  sessionRepository: {
-    findById: vi.fn(),
-  },
-
-  storeRepository: {
-    findById: vi.fn(),
-    findByOwnerId: vi.fn(),
-  },
-
-  categoryRepository: {
-    findById: vi.fn(),
-  },
-
-  eventRepository: {
-    create: vi.fn(),
-  },
-}));
-
-vi.mock("../../src/database/knex.js", () => ({
-  default: mocks.database,
-}));
-
-vi.mock("../../src/database/repositories/product.repository.js", () => ({
-  ProductRepository: vi.fn().mockImplementation(() => mocks.productRepository),
-}));
-
-vi.mock("../../src/database/repositories/session.repository.js", () => ({
-  SessionRepository: vi.fn().mockImplementation(() => mocks.sessionRepository),
-}));
-
-vi.mock("../../src/database/repositories/store.repository.js", () => ({
-  StoreRepository: vi.fn().mockImplementation(() => mocks.storeRepository),
-}));
-
-vi.mock("../../src/database/repositories/category.repository.js", () => ({
-  CategoryRepository: vi
-    .fn()
-    .mockImplementation(() => mocks.categoryRepository),
-}));
-
-vi.mock("../../src/database/repositories/event.repository.js", () => ({
-  EventRepository: vi.fn().mockImplementation(() => mocks.eventRepository),
-}));
+import { StoreService } from "../../src/services/store.service.js";
 
 import {
-  ProductService,
-  type CreateProductInput,
-  type UpdateProductInput,
-} from "../../src/services/product.service.js";
+  StoreRepository,
+  type Store,
+} from "../../src/database/repositories/store.repository.js";
 
-describe("ProductService", () => {
-  let service: ProductService;
+import { SessionRepository } from "../../src/database/repositories/session.repository.js";
+import { EventRepository } from "../../src/database/repositories/event.repository.js";
 
-  const session = {
-    id: "session-1",
-    user_id: "user-1",
-    expires_at: new Date(Date.now() + 60 * 60 * 1000),
-    created_at: new Date(),
-    updated_at: new Date(),
-  };
+describe("StoreService", () => {
+  const SESSION_ID = "11111111-1111-1111-1111-111111111111";
 
-  const anonymousSession = {
-    id: "session-anonymous",
-    user_id: null,
-    expires_at: new Date(Date.now() + 60 * 60 * 1000),
-    created_at: new Date(),
-    updated_at: new Date(),
-  };
+  const STORE_ID = "44444444-4444-4444-4444-444444444444";
 
-  const expiredSession = {
-    id: "session-expired",
-    user_id: "user-1",
-    expires_at: new Date(Date.now() - 60 * 1000),
-    created_at: new Date(),
-    updated_at: new Date(),
-  };
+  const USER_ID = "88888888-8888-8888-8888-888888888888";
 
-  const activeStore = {
-    id: "store-1",
-    owner_id: "user-1",
-    name: "Test Store",
-    description: null,
+  const OTHER_USER_ID = "99999999-9999-9999-9999-999999999999";
+
+  const validCreateInput = {
+    name: "Ma Boutique",
+    description: "Une boutique de produits de beauté",
     country: "TG",
-    city: "Lome",
-    currency: "XOF",
-    status: "active" as const,
-    created_at: new Date(),
-    updated_at: new Date(),
+    city: "Lomé",
   };
 
-  const inactiveStore = {
-    ...activeStore,
-    status: "inactive" as const,
+  const validUpdateInput = {
+    name: "Ma Nouvelle Boutique",
+    description: "Nouvelle description",
+    country: "BJ",
+    city: "Cotonou",
   };
 
-  const otherOwnerStore = {
-    ...activeStore,
-    id: "store-2",
-    owner_id: "user-2",
+  const mockDatabase = {
+    transaction: vi.fn(),
   };
 
-  const activeCategory = {
-    id: "category-1",
-    parent_id: null,
-    name: "Cosmetics",
-    slug: "cosmetics",
-    status: "active" as const,
-    created_at: new Date(),
-    updated_at: new Date(),
+  const mocks = {
+    storeRepository: {
+      findById: vi.fn(),
+      findByOwnerId: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      setStatus: vi.fn(),
+    },
+
+    sessionRepository: {
+      findById: vi.fn(),
+    },
   };
 
-  const inactiveCategory = {
-    ...activeCategory,
-    status: "inactive" as const,
-  };
+  let storeService: StoreService;
 
-  const activeProduct = {
-    id: "product-1",
-    store_id: "store-1",
-    category_id: "category-1",
-    name: "Lipstick",
-    description: "Red lipstick",
-    price: "5000.00",
-    availability: "available" as const,
-    status: "active" as const,
-    created_at: new Date(),
-    updated_at: new Date(),
-  };
+  let storeCreateSpy: ReturnType<typeof vi.spyOn>;
+  let storeUpdateSpy: ReturnType<typeof vi.spyOn>;
+  let storeSetStatusSpy: ReturnType<typeof vi.spyOn>;
+  let eventCreateSpy: ReturnType<typeof vi.spyOn>;
 
-  const unavailableProduct = {
-    ...activeProduct,
-    availability: "unavailable" as const,
-  };
+  function createSession(overrides: Record<string, unknown> = {}) {
+    return {
+      id: SESSION_ID,
+      user_id: USER_ID,
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      created_at: new Date(),
+      ...overrides,
+    };
+  }
 
-  const archivedProduct = {
-    ...activeProduct,
-    status: "archived" as const,
-    availability: "unavailable" as const,
-  };
-
-  const secondProduct = {
-    ...activeProduct,
-    id: "product-2",
-    name: "Foundation",
-  };
-
-  const createInput: CreateProductInput = {
-    category_id: "category-1",
-    name: "Lipstick",
-    description: "Red lipstick",
-    price: 5000,
-  };
-
-  const updateInput: UpdateProductInput = {
-    category_id: "category-1",
-    name: "Updated Lipstick",
-    description: "Updated description",
-    price: 6500,
-  };
+  function createStore(overrides: Record<string, unknown> = {}): Store {
+    return {
+      id: STORE_ID,
+      owner_id: USER_ID,
+      name: "Ma Boutique",
+      description: "Une boutique de test",
+      country: "TG",
+      city: "Lomé",
+      currency: "XOF",
+      status: "active",
+      created_at: new Date(),
+      updated_at: new Date(),
+      ...overrides,
+    } as Store;
+  }
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.restoreAllMocks();
 
-    service = new ProductService(
-      mocks.database as any,
-      mocks.productRepository as any,
-      mocks.sessionRepository as any,
-      mocks.storeRepository as any,
-      mocks.categoryRepository as any,
+    Object.values(mocks.storeRepository).forEach((mock) => {
+      mock.mockReset();
+    });
+
+    Object.values(mocks.sessionRepository).forEach((mock) => {
+      mock.mockReset();
+    });
+
+    mockDatabase.transaction.mockReset();
+
+    mockDatabase.transaction.mockImplementation(
+      async (callback: (trx: Knex) => Promise<unknown>) => {
+        return callback({} as Knex);
+      },
     );
 
-    /*
-     * IMPORTANT :
-     * Chaque test repart d'un store actif.
-     *
-     * Cela empêche un test qui configure un store "inactive"
-     * de contaminer les tests suivants.
-     */
-    mocks.sessionRepository.findById.mockResolvedValue(session);
+    storeCreateSpy = vi
+      .spyOn(StoreRepository.prototype, "create")
+      .mockResolvedValue(createStore());
 
-    mocks.storeRepository.findByOwnerId.mockResolvedValue(activeStore);
-    mocks.storeRepository.findById.mockResolvedValue(activeStore);
+    storeUpdateSpy = vi
+      .spyOn(StoreRepository.prototype, "update")
+      .mockResolvedValue(createStore());
 
-    mocks.categoryRepository.findById.mockResolvedValue(activeCategory);
+    storeSetStatusSpy = vi
+      .spyOn(StoreRepository.prototype, "setStatus")
+      .mockResolvedValue(createStore());
 
-    mocks.productRepository.findById.mockResolvedValue(activeProduct);
-    mocks.productRepository.findByStoreId.mockResolvedValue([
-      activeProduct,
-      secondProduct,
-    ]);
-    mocks.productRepository.findByCategoryId.mockResolvedValue([activeProduct]);
-    mocks.productRepository.findAvailableByStoreId.mockResolvedValue([
-      activeProduct,
-    ]);
+    eventCreateSpy = vi
+      .spyOn(EventRepository.prototype, "create")
+      .mockResolvedValue(undefined as never);
 
-    mocks.database.transaction.mockImplementation(async (callback: any) => {
-      return callback(mocks.database);
-    });
-
-    mocks.productRepository.create.mockResolvedValue(activeProduct);
-    mocks.productRepository.update.mockResolvedValue({
-      ...activeProduct,
-      name: "Updated Lipstick",
-      description: "Updated description",
-      price: "6500.00",
-    });
-
-    mocks.productRepository.setAvailability.mockResolvedValue(
-      unavailableProduct,
+    storeService = new StoreService(
+      mockDatabase as unknown as Knex,
+      mocks.storeRepository as unknown as StoreRepository,
+      mocks.sessionRepository as unknown as SessionRepository,
     );
-
-    mocks.productRepository.setStatus.mockResolvedValue(archivedProduct);
-
-    mocks.eventRepository.create.mockResolvedValue({
-      id: "event-1",
-      event_name: "product.created",
-    });
   });
 
-  // ============================================================
+  function prepareAuthenticatedSession(
+    overrides: Record<string, unknown> = {},
+  ) {
+    mocks.sessionRepository.findById.mockResolvedValue(
+      createSession(overrides),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // CREATE
-  // ============================================================
+  // ---------------------------------------------------------------------------
 
   describe("create", () => {
-    it("should create a product successfully", async () => {
-      const result = await service.create("session-1", createInput);
+    it("should create a store for an authenticated session", async () => {
+      prepareAuthenticatedSession();
 
-      expect(result).toEqual(activeProduct);
-
-      expect(mocks.productRepository.create).toHaveBeenCalledWith({
-        store_id: "store-1",
-        category_id: "category-1",
-        name: "Lipstick",
-        description: "Red lipstick",
-        price: 5000,
-        availability: "available",
-        status: "active",
-      });
-    });
-
-    it("should authenticate the session before creating", async () => {
-      await service.create("session-1", createInput);
-
-      expect(mocks.sessionRepository.findById).toHaveBeenCalledWith(
-        "session-1",
-      );
-    });
-
-    it("should reject when the session does not exist", async () => {
-      mocks.sessionRepository.findById.mockResolvedValue(undefined);
-
-      await expect(
-        service.create("session-1", createInput),
-      ).rejects.toMatchObject({
-        code: "SESSION_NOT_FOUND",
-      });
-
-      expect(mocks.productRepository.create).not.toHaveBeenCalled();
-    });
-
-    it("should reject when the session is expired", async () => {
-      mocks.sessionRepository.findById.mockResolvedValue(expiredSession);
-
-      await expect(
-        service.create("session-expired", createInput),
-      ).rejects.toMatchObject({
-        code: "SESSION_EXPIRED",
-      });
-
-      expect(mocks.productRepository.create).not.toHaveBeenCalled();
-    });
-
-    it("should reject when the session is anonymous", async () => {
-      mocks.sessionRepository.findById.mockResolvedValue(anonymousSession);
-
-      await expect(
-        service.create("session-anonymous", createInput),
-      ).rejects.toMatchObject({
-        code: "PRODUCT_FORBIDDEN",
-      });
-
-      expect(mocks.productRepository.create).not.toHaveBeenCalled();
-    });
-
-    it("should reject when the seller does not have a store", async () => {
       mocks.storeRepository.findByOwnerId.mockResolvedValue(undefined);
 
-      await expect(
-        service.create("session-1", createInput),
-      ).rejects.toMatchObject({
-        code: "STORE_NOT_FOUND",
-      });
+      const createdStore = createStore();
 
-      expect(mocks.productRepository.create).not.toHaveBeenCalled();
+      storeCreateSpy.mockResolvedValue(createdStore);
+
+      const result = await storeService.create(
+        SESSION_ID,
+        validCreateInput,
+      );
+
+      expect(result).toEqual(createdStore);
+
+      expect(mocks.sessionRepository.findById).toHaveBeenCalledWith(
+        SESSION_ID,
+      );
+
+      expect(mocks.storeRepository.findByOwnerId).toHaveBeenCalledWith(
+        USER_ID,
+      );
+
+      expect(mockDatabase.transaction).toHaveBeenCalledTimes(1);
+
+      expect(storeCreateSpy).toHaveBeenCalledWith({
+        owner_id: USER_ID,
+        name: "Ma Boutique",
+        description: "Une boutique de produits de beauté",
+        country: "TG",
+        city: "Lomé",
+        currency: "XOF",
+      });
     });
 
-    it("should reject when the seller store is inactive", async () => {
-      mocks.storeRepository.findByOwnerId.mockResolvedValue(inactiveStore);
+    it("should normalize the store name", async () => {
+      prepareAuthenticatedSession();
 
-      await expect(
-        service.create("session-1", createInput),
-      ).rejects.toMatchObject({
-        code: "STORE_INACTIVE",
+      mocks.storeRepository.findByOwnerId.mockResolvedValue(undefined);
+
+      await storeService.create(SESSION_ID, {
+        ...validCreateInput,
+        name: "  Ma Boutique  ",
       });
 
-      expect(mocks.productRepository.create).not.toHaveBeenCalled();
-    });
-
-    it("should reject when the category does not exist", async () => {
-      mocks.categoryRepository.findById.mockResolvedValue(undefined);
-
-      await expect(
-        service.create("session-1", createInput),
-      ).rejects.toMatchObject({
-        code: "CATEGORY_NOT_FOUND",
-      });
-
-      expect(mocks.productRepository.create).not.toHaveBeenCalled();
-    });
-
-    it("should reject when the category is inactive", async () => {
-      mocks.categoryRepository.findById.mockResolvedValue(inactiveCategory);
-
-      await expect(
-        service.create("session-1", createInput),
-      ).rejects.toMatchObject({
-        code: "CATEGORY_INACTIVE",
-      });
-
-      expect(mocks.productRepository.create).not.toHaveBeenCalled();
-    });
-
-    it("should trim the product name", async () => {
-      await service.create("session-1", {
-        ...createInput,
-        name: "   Lipstick   ",
-      });
-
-      expect(mocks.productRepository.create).toHaveBeenCalledWith(
+      expect(storeCreateSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          name: "Lipstick",
+          name: "Ma Boutique",
         }),
       );
     });
 
-    it("should reject an empty product name", async () => {
-      await expect(
-        service.create("session-1", {
-          ...createInput,
-          name: "   ",
-        }),
-      ).rejects.toMatchObject({
-        code: "INVALID_PRODUCT",
-      });
-    });
+    it("should normalize the country to uppercase", async () => {
+      prepareAuthenticatedSession();
 
-    it("should reject a product name longer than 150 characters", async () => {
-      await expect(
-        service.create("session-1", {
-          ...createInput,
-          name: "a".repeat(151),
-        }),
-      ).rejects.toMatchObject({
-        code: "INVALID_PRODUCT",
-      });
-    });
+      mocks.storeRepository.findByOwnerId.mockResolvedValue(undefined);
 
-    it("should accept a product name of exactly 150 characters", async () => {
-      await service.create("session-1", {
-        ...createInput,
-        name: "a".repeat(150),
+      await storeService.create(SESSION_ID, {
+        ...validCreateInput,
+        country: "tg",
       });
 
-      expect(mocks.productRepository.create).toHaveBeenCalledWith(
+      expect(storeCreateSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          name: "a".repeat(150),
+          country: "TG",
         }),
       );
     });
 
-    it("should reject a zero price", async () => {
-      await expect(
-        service.create("session-1", {
-          ...createInput,
-          price: 0,
-        }),
-      ).rejects.toMatchObject({
-        code: "INVALID_PRODUCT",
+    it("should normalize the city", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findByOwnerId.mockResolvedValue(undefined);
+
+      await storeService.create(SESSION_ID, {
+        ...validCreateInput,
+        city: "  Lomé  ",
       });
-    });
 
-    it("should reject a negative price", async () => {
-      await expect(
-        service.create("session-1", {
-          ...createInput,
-          price: -100,
-        }),
-      ).rejects.toMatchObject({
-        code: "INVALID_PRODUCT",
-      });
-    });
-
-    it("should reject NaN as price", async () => {
-      await expect(
-        service.create("session-1", {
-          ...createInput,
-          price: Number.NaN,
-        }),
-      ).rejects.toMatchObject({
-        code: "INVALID_PRODUCT",
-      });
-    });
-
-    it("should reject Infinity as price", async () => {
-      await expect(
-        service.create("session-1", {
-          ...createInput,
-          price: Number.POSITIVE_INFINITY,
-        }),
-      ).rejects.toMatchObject({
-        code: "INVALID_PRODUCT",
-      });
-    });
-
-    it("should use XOF through the product/store architecture", async () => {
-      await service.create("session-1", createInput);
-
-      expect(mocks.productRepository.create).toHaveBeenCalledWith(
+      expect(storeCreateSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          store_id: "store-1",
-        }),
-      );
-
-      expect(activeStore.currency).toBe("XOF");
-    });
-
-    it("should create the product as active and available", async () => {
-      await service.create("session-1", createInput);
-
-      expect(mocks.productRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          availability: "available",
-          status: "active",
+          city: "Lomé",
         }),
       );
     });
 
-    it("should create product.created event", async () => {
-      await service.create("session-1", createInput);
+    it("should use null when description is omitted", async () => {
+      prepareAuthenticatedSession();
 
-      expect(mocks.eventRepository.create).toHaveBeenCalledWith({
-        event_name: "product.created",
-        session_id: "session-1",
-        user_id: "user-1",
-        store_id: "store-1",
-        product_id: "product-1",
-        metadata: {},
-      });
-    });
+      mocks.storeRepository.findByOwnerId.mockResolvedValue(undefined);
 
-    it("should create product and event inside the same transaction", async () => {
-      const executionOrder: string[] = [];
-
-      mocks.productRepository.create.mockImplementation(async () => {
-        executionOrder.push("product");
-        return activeProduct;
+      await storeService.create(SESSION_ID, {
+        name: validCreateInput.name,
+        country: validCreateInput.country,
+        city: validCreateInput.city,
       });
 
-      mocks.eventRepository.create.mockImplementation(async () => {
-        executionOrder.push("event");
-        return {
-          id: "event-1",
-        };
-      });
-
-      await service.create("session-1", createInput);
-
-      expect(mocks.database.transaction).toHaveBeenCalledTimes(1);
-      expect(executionOrder).toEqual(["product", "event"]);
-    });
-
-    it("should propagate product creation errors", async () => {
-      mocks.productRepository.create.mockRejectedValue(
-        new Error("database error"),
-      );
-
-      await expect(service.create("session-1", createInput)).rejects.toThrow(
-        "database error",
-      );
-    });
-
-    it("should propagate event creation errors", async () => {
-      mocks.eventRepository.create.mockRejectedValue(new Error("event error"));
-
-      await expect(service.create("session-1", createInput)).rejects.toThrow(
-        "event error",
-      );
-    });
-
-    it("should keep a null description when none is provided", async () => {
-      await service.create("session-1", {
-        category_id: "category-1",
-        name: "Lipstick",
-        price: 5000,
-      });
-
-      expect(mocks.productRepository.create).toHaveBeenCalledWith(
+      expect(storeCreateSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           description: null,
         }),
       );
     });
-  });
 
-  // ============================================================
-  // GET BY ID
-  // ============================================================
+    it("should preserve a null description", async () => {
+      prepareAuthenticatedSession();
 
-  describe("getById", () => {
-    it("should return the product", async () => {
-      const result = await service.getById("product-1");
+      mocks.storeRepository.findByOwnerId.mockResolvedValue(undefined);
 
-      expect(result).toEqual(activeProduct);
-      expect(mocks.productRepository.findById).toHaveBeenCalledWith(
-        "product-1",
-      );
-    });
-
-    it("should reject when the product does not exist", async () => {
-      mocks.productRepository.findById.mockResolvedValue(undefined);
-
-      await expect(service.getById("product-unknown")).rejects.toMatchObject({
-        code: "PRODUCT_NOT_FOUND",
+      await storeService.create(SESSION_ID, {
+        ...validCreateInput,
+        description: null,
       });
-    });
 
-    it("should not require authentication for public product reading", async () => {
-      await service.getById("product-1");
-
-      expect(mocks.sessionRepository.findById).not.toHaveBeenCalled();
-    });
-  });
-
-  // ============================================================
-  // GET BY STORE
-  // ============================================================
-
-  describe("getByStore", () => {
-    it("should return products belonging to the store", async () => {
-      const result = await service.getByStore("store-1");
-
-      expect(result).toEqual([activeProduct, secondProduct]);
-
-      expect(mocks.productRepository.findByStoreId).toHaveBeenCalledWith(
-        "store-1",
-      );
-    });
-
-    it("should return an empty array when the store has no products", async () => {
-      mocks.productRepository.findByStoreId.mockResolvedValue([]);
-
-      const result = await service.getByStore("store-1");
-
-      expect(result).toEqual([]);
-    });
-  });
-
-  // ============================================================
-  // GET BY CATEGORY
-  // ============================================================
-
-  describe("getByCategory", () => {
-    it("should return products belonging to the category", async () => {
-      const result = await service.getByCategory("category-1");
-
-      expect(result).toEqual([activeProduct]);
-
-      expect(mocks.productRepository.findByCategoryId).toHaveBeenCalledWith(
-        "category-1",
-      );
-    });
-
-    it("should return an empty array when the category has no products", async () => {
-      mocks.productRepository.findByCategoryId.mockResolvedValue([]);
-
-      const result = await service.getByCategory("category-1");
-
-      expect(result).toEqual([]);
-    });
-  });
-
-  // ============================================================
-  // GET AVAILABLE BY STORE
-  // ============================================================
-
-  describe("getAvailableByStore", () => {
-    it("should return only available products", async () => {
-      const result = await service.getAvailableByStore("store-1");
-
-      expect(result).toEqual([activeProduct]);
-
-      expect(
-        mocks.productRepository.findAvailableByStoreId,
-      ).toHaveBeenCalledWith("store-1");
-    });
-
-    it("should return an empty array when there are no available products", async () => {
-      mocks.productRepository.findAvailableByStoreId.mockResolvedValue([]);
-
-      const result = await service.getAvailableByStore("store-1");
-
-      expect(result).toEqual([]);
-    });
-  });
-
-  // ============================================================
-  // UPDATE
-  // ============================================================
-
-  describe("update", () => {
-    it("should update a product successfully", async () => {
-      const result = await service.update(
-        "session-1",
-        "product-1",
-        updateInput,
-      );
-
-      expect(result).toEqual(
+      expect(storeCreateSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          name: "Updated Lipstick",
-          description: "Updated description",
-          price: "6500.00",
+          description: null,
         }),
       );
-
-      expect(mocks.productRepository.update).toHaveBeenCalledWith("product-1", {
-        category_id: "category-1",
-        name: "Updated Lipstick",
-        description: "Updated description",
-        price: 6500,
-      });
     });
 
-    it("should require an authenticated session", async () => {
-      mocks.sessionRepository.findById.mockResolvedValue(anonymousSession);
+    it("should reject a nonexistent session", async () => {
+      mocks.sessionRepository.findById.mockResolvedValue(undefined);
 
       await expect(
-        service.update("session-anonymous", "product-1", updateInput),
+        storeService.create(SESSION_ID, validCreateInput),
       ).rejects.toMatchObject({
-        code: "PRODUCT_FORBIDDEN",
+        code: "SESSION_NOT_FOUND",
       });
 
-      expect(mocks.productRepository.update).not.toHaveBeenCalled();
+      expect(mockDatabase.transaction).not.toHaveBeenCalled();
     });
 
     it("should reject an expired session", async () => {
-      mocks.sessionRepository.findById.mockResolvedValue(expiredSession);
+      prepareAuthenticatedSession({
+        expires_at: new Date(Date.now() - 1000),
+      });
 
       await expect(
-        service.update("session-expired", "product-1", updateInput),
+        storeService.create(SESSION_ID, validCreateInput),
       ).rejects.toMatchObject({
         code: "SESSION_EXPIRED",
       });
+
+      expect(mockDatabase.transaction).not.toHaveBeenCalled();
     });
 
-    it("should reject when the product does not exist", async () => {
-      mocks.productRepository.findById.mockResolvedValue(undefined);
+    it("should reject an anonymous session", async () => {
+      prepareAuthenticatedSession({
+        user_id: null,
+      });
 
       await expect(
-        service.update("session-1", "product-1", updateInput),
+        storeService.create(SESSION_ID, validCreateInput),
       ).rejects.toMatchObject({
-        code: "PRODUCT_NOT_FOUND",
+        code: "STORE_FORBIDDEN",
       });
+
+      expect(mockDatabase.transaction).not.toHaveBeenCalled();
     });
 
-    it("should reject when the product store does not exist", async () => {
+    it("should reject creation when the owner already has a store", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findByOwnerId.mockResolvedValue(createStore());
+
+      await expect(
+        storeService.create(SESSION_ID, {
+          ...validCreateInput,
+          name: "Deuxième Boutique",
+        }),
+      ).rejects.toMatchObject({
+        code: "STORE_ALREADY_EXISTS",
+      });
+
+      expect(mockDatabase.transaction).not.toHaveBeenCalled();
+
+      expect(storeCreateSpy).not.toHaveBeenCalled();
+    });
+
+    it("should reject an empty store name", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findByOwnerId.mockResolvedValue(undefined);
+
+      await expect(
+        storeService.create(SESSION_ID, {
+          ...validCreateInput,
+          name: "   ",
+        }),
+      ).rejects.toMatchObject({
+        code: "INVALID_STORE",
+      });
+
+      expect(mockDatabase.transaction).not.toHaveBeenCalled();
+    });
+
+    it("should reject a store name longer than 100 characters", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findByOwnerId.mockResolvedValue(undefined);
+
+      await expect(
+        storeService.create(SESSION_ID, {
+          ...validCreateInput,
+          name: "A".repeat(101),
+        }),
+      ).rejects.toMatchObject({
+        code: "INVALID_STORE",
+      });
+
+      expect(mockDatabase.transaction).not.toHaveBeenCalled();
+    });
+
+    it("should reject an invalid country", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findByOwnerId.mockResolvedValue(undefined);
+
+      await expect(
+        storeService.create(SESSION_ID, {
+          ...validCreateInput,
+          country: "TGO",
+        }),
+      ).rejects.toMatchObject({
+        code: "INVALID_STORE",
+      });
+
+      expect(mockDatabase.transaction).not.toHaveBeenCalled();
+    });
+
+    it("should reject an empty city", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findByOwnerId.mockResolvedValue(undefined);
+
+      await expect(
+        storeService.create(SESSION_ID, {
+          ...validCreateInput,
+          city: "   ",
+        }),
+      ).rejects.toMatchObject({
+        code: "INVALID_STORE",
+      });
+
+      expect(mockDatabase.transaction).not.toHaveBeenCalled();
+    });
+
+    it("should reject a city longer than 100 characters", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findByOwnerId.mockResolvedValue(undefined);
+
+      await expect(
+        storeService.create(SESSION_ID, {
+          ...validCreateInput,
+          city: "A".repeat(101),
+        }),
+      ).rejects.toMatchObject({
+        code: "INVALID_STORE",
+      });
+
+      expect(mockDatabase.transaction).not.toHaveBeenCalled();
+    });
+
+    it("should create the store.created event inside the transaction", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findByOwnerId.mockResolvedValue(undefined);
+
+      const createdStore = createStore();
+
+      storeCreateSpy.mockResolvedValue(createdStore);
+
+      await storeService.create(SESSION_ID, validCreateInput);
+
+      expect(eventCreateSpy).toHaveBeenCalledWith({
+        event_name: "store.created",
+        session_id: SESSION_ID,
+        user_id: USER_ID,
+        store_id: STORE_ID,
+        metadata: {},
+      });
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // GET BY ID
+  // ---------------------------------------------------------------------------
+
+  describe("getById", () => {
+    it("should return the store", async () => {
+      const store = createStore();
+
+      mocks.storeRepository.findById.mockResolvedValue(store);
+
+      const result = await storeService.getById(STORE_ID);
+
+      expect(result).toEqual(store);
+
+      expect(mocks.storeRepository.findById).toHaveBeenCalledWith(
+        STORE_ID,
+      );
+    });
+
+    it("should reject a nonexistent store", async () => {
       mocks.storeRepository.findById.mockResolvedValue(undefined);
 
       await expect(
-        service.update("session-1", "product-1", updateInput),
+        storeService.getById(STORE_ID),
+      ).rejects.toMatchObject({
+        code: "STORE_NOT_FOUND",
+      });
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // GET BY OWNER ID
+  // ---------------------------------------------------------------------------
+
+  describe("getByOwnerId", () => {
+    it("should return the owner's store", async () => {
+      const store = createStore();
+
+      mocks.storeRepository.findByOwnerId.mockResolvedValue(store);
+
+      const result = await storeService.getByOwnerId(USER_ID);
+
+      expect(result).toEqual(store);
+
+      expect(mocks.storeRepository.findByOwnerId).toHaveBeenCalledWith(
+        USER_ID,
+      );
+    });
+
+    it("should return null when the owner has no store", async () => {
+      mocks.storeRepository.findByOwnerId.mockResolvedValue(undefined);
+
+      const result = await storeService.getByOwnerId(USER_ID);
+
+      expect(result).toBeNull();
+
+      expect(mocks.storeRepository.findByOwnerId).toHaveBeenCalledWith(
+        USER_ID,
+      );
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // UPDATE
+  // ---------------------------------------------------------------------------
+
+  describe("update", () => {
+    it("should update an owned store", async () => {
+      prepareAuthenticatedSession();
+
+      const store = createStore();
+
+      const updatedStore = createStore({
+        name: "Ma Nouvelle Boutique",
+        description: "Nouvelle description",
+        country: "BJ",
+        city: "Cotonou",
+      });
+
+      mocks.storeRepository.findById.mockResolvedValue(store);
+
+      storeUpdateSpy.mockResolvedValue(updatedStore);
+
+      const result = await storeService.update(
+        SESSION_ID,
+        STORE_ID,
+        validUpdateInput,
+      );
+
+      expect(result).toEqual(updatedStore);
+
+      expect(mocks.storeRepository.findById).toHaveBeenCalledWith(
+        STORE_ID,
+      );
+
+      expect(storeUpdateSpy).toHaveBeenCalledWith(STORE_ID, {
+        name: "Ma Nouvelle Boutique",
+        description: "Nouvelle description",
+        country: "BJ",
+        city: "Cotonou",
+      });
+    });
+
+    it("should update only the provided fields", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findById.mockResolvedValue(createStore());
+
+      await storeService.update(SESSION_ID, STORE_ID, {
+        name: "Boutique Modifiée",
+      });
+
+      expect(storeUpdateSpy).toHaveBeenCalledWith(STORE_ID, {
+        name: "Boutique Modifiée",
+      });
+    });
+
+    it("should normalize the name during update", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findById.mockResolvedValue(createStore());
+
+      await storeService.update(SESSION_ID, STORE_ID, {
+        name: "  Boutique Modifiée  ",
+      });
+
+      expect(storeUpdateSpy).toHaveBeenCalledWith(STORE_ID, {
+        name: "Boutique Modifiée",
+      });
+    });
+
+    it("should normalize the country during update", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findById.mockResolvedValue(createStore());
+
+      await storeService.update(SESSION_ID, STORE_ID, {
+        country: " bj ",
+      });
+
+      expect(storeUpdateSpy).toHaveBeenCalledWith(STORE_ID, {
+        country: "BJ",
+      });
+    });
+
+    it("should normalize the city during update", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findById.mockResolvedValue(createStore());
+
+      await storeService.update(SESSION_ID, STORE_ID, {
+        city: "  Cotonou  ",
+      });
+
+      expect(storeUpdateSpy).toHaveBeenCalledWith(STORE_ID, {
+        city: "Cotonou",
+      });
+    });
+
+    it("should preserve a null description during update", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findById.mockResolvedValue(createStore());
+
+      await storeService.update(SESSION_ID, STORE_ID, {
+        description: null,
+      });
+
+      expect(storeUpdateSpy).toHaveBeenCalledWith(STORE_ID, {
+        description: null,
+      });
+    });
+
+    it("should reject a nonexistent session", async () => {
+      mocks.sessionRepository.findById.mockResolvedValue(undefined);
+
+      await expect(
+        storeService.update(
+          SESSION_ID,
+          STORE_ID,
+          validUpdateInput,
+        ),
+      ).rejects.toMatchObject({
+        code: "SESSION_NOT_FOUND",
+      });
+
+      expect(mockDatabase.transaction).not.toHaveBeenCalled();
+    });
+
+    it("should reject an expired session", async () => {
+      prepareAuthenticatedSession({
+        expires_at: new Date(Date.now() - 1000),
+      });
+
+      await expect(
+        storeService.update(
+          SESSION_ID,
+          STORE_ID,
+          validUpdateInput,
+        ),
+      ).rejects.toMatchObject({
+        code: "SESSION_EXPIRED",
+      });
+
+      expect(mockDatabase.transaction).not.toHaveBeenCalled();
+    });
+
+    it("should reject an anonymous session", async () => {
+      prepareAuthenticatedSession({
+        user_id: null,
+      });
+
+      await expect(
+        storeService.update(
+          SESSION_ID,
+          STORE_ID,
+          validUpdateInput,
+        ),
+      ).rejects.toMatchObject({
+        code: "STORE_FORBIDDEN",
+      });
+
+      expect(mockDatabase.transaction).not.toHaveBeenCalled();
+    });
+
+    it("should reject a nonexistent store", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findById.mockResolvedValue(undefined);
+
+      await expect(
+        storeService.update(
+          SESSION_ID,
+          STORE_ID,
+          validUpdateInput,
+        ),
+      ).rejects.toMatchObject({
+        code: "STORE_NOT_FOUND",
+      });
+
+      expect(mockDatabase.transaction).not.toHaveBeenCalled();
+    });
+
+    it("should reject an update from a non-owner", async () => {
+      prepareAuthenticatedSession({
+        user_id: USER_ID,
+      });
+
+      mocks.storeRepository.findById.mockResolvedValue(
+        createStore({
+          owner_id: OTHER_USER_ID,
+        }),
+      );
+
+      await expect(
+        storeService.update(
+          SESSION_ID,
+          STORE_ID,
+          validUpdateInput,
+        ),
+      ).rejects.toMatchObject({
+        code: "STORE_FORBIDDEN",
+      });
+
+      expect(mockDatabase.transaction).not.toHaveBeenCalled();
+    });
+
+    it("should reject an invalid name during update", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findById.mockResolvedValue(createStore());
+
+      await expect(
+        storeService.update(SESSION_ID, STORE_ID, {
+          name: "   ",
+        }),
+      ).rejects.toMatchObject({
+        code: "INVALID_STORE",
+      });
+
+      expect(mockDatabase.transaction).not.toHaveBeenCalled();
+    });
+
+    it("should reject an invalid country during update", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findById.mockResolvedValue(createStore());
+
+      await expect(
+        storeService.update(SESSION_ID, STORE_ID, {
+          country: "TGO",
+        }),
+      ).rejects.toMatchObject({
+        code: "INVALID_STORE",
+      });
+
+      expect(mockDatabase.transaction).not.toHaveBeenCalled();
+    });
+
+    it("should reject an invalid city during update", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findById.mockResolvedValue(createStore());
+
+      await expect(
+        storeService.update(SESSION_ID, STORE_ID, {
+          city: "   ",
+        }),
+      ).rejects.toMatchObject({
+        code: "INVALID_STORE",
+      });
+
+      expect(mockDatabase.transaction).not.toHaveBeenCalled();
+    });
+
+    it("should reject when the repository cannot update the store", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findById.mockResolvedValue(createStore());
+
+      storeUpdateSpy.mockResolvedValue(undefined);
+
+      await expect(
+        storeService.update(
+          SESSION_ID,
+          STORE_ID,
+          validUpdateInput,
+        ),
       ).rejects.toMatchObject({
         code: "STORE_NOT_FOUND",
       });
     });
 
-    it("should reject when the seller does not own the product store", async () => {
-      mocks.storeRepository.findById.mockResolvedValue(otherOwnerStore);
+    it("should create the store.updated event", async () => {
+      prepareAuthenticatedSession();
 
-      await expect(
-        service.update("session-1", "product-1", updateInput),
-      ).rejects.toMatchObject({
-        code: "PRODUCT_FORBIDDEN",
-      });
-    });
+      mocks.storeRepository.findById.mockResolvedValue(createStore());
 
-    it("should reject when the product store is inactive", async () => {
-      mocks.storeRepository.findById.mockResolvedValue(inactiveStore);
-
-      await expect(
-        service.update("session-1", "product-1", updateInput),
-      ).rejects.toMatchObject({
-        code: "STORE_INACTIVE",
-      });
-    });
-
-    it("should validate the new category", async () => {
-      await service.update("session-1", "product-1", {
-        category_id: "category-1",
+      const updatedStore = createStore({
+        name: "Boutique Modifiée",
       });
 
-      expect(mocks.categoryRepository.findById).toHaveBeenCalledWith(
-        "category-1",
-      );
-    });
+      storeUpdateSpy.mockResolvedValue(updatedStore);
 
-    it("should reject when the new category does not exist", async () => {
-      mocks.categoryRepository.findById.mockResolvedValue(undefined);
-
-      await expect(
-        service.update("session-1", "product-1", {
-          category_id: "unknown-category",
-        }),
-      ).rejects.toMatchObject({
-        code: "CATEGORY_NOT_FOUND",
-      });
-    });
-
-    it("should reject when the new category is inactive", async () => {
-      mocks.categoryRepository.findById.mockResolvedValue(inactiveCategory);
-
-      await expect(
-        service.update("session-1", "product-1", {
-          category_id: "category-1",
-        }),
-      ).rejects.toMatchObject({
-        code: "CATEGORY_INACTIVE",
-      });
-    });
-
-    it("should trim the updated product name", async () => {
-      await service.update("session-1", "product-1", {
-        name: "   New Name   ",
+      await storeService.update(SESSION_ID, STORE_ID, {
+        name: "Boutique Modifiée",
       });
 
-      expect(mocks.productRepository.update).toHaveBeenCalledWith("product-1", {
-        name: "New Name",
-      });
-    });
-
-    it("should reject an empty updated name", async () => {
-      await expect(
-        service.update("session-1", "product-1", {
-          name: "   ",
-        }),
-      ).rejects.toMatchObject({
-        code: "INVALID_PRODUCT",
-      });
-    });
-
-    it("should reject an updated name longer than 150 characters", async () => {
-      await expect(
-        service.update("session-1", "product-1", {
-          name: "a".repeat(151),
-        }),
-      ).rejects.toMatchObject({
-        code: "INVALID_PRODUCT",
-      });
-    });
-
-    it("should reject an invalid updated price", async () => {
-      await expect(
-        service.update("session-1", "product-1", {
-          price: 0,
-        }),
-      ).rejects.toMatchObject({
-        code: "INVALID_PRODUCT",
-      });
-    });
-
-    it("should allow updating only the description", async () => {
-      await service.update("session-1", "product-1", {
-        description: "New description",
-      });
-
-      expect(mocks.productRepository.update).toHaveBeenCalledWith("product-1", {
-        description: "New description",
-      });
-    });
-
-    it("should not allow changing the store through the update input", async () => {
-      await service.update("session-1", "product-1", {
-        category_id: "category-1",
-        name: "Updated",
-        price: 7000,
-      });
-
-      const updateCall = mocks.productRepository.update.mock.calls[0][1];
-
-      expect(updateCall).not.toHaveProperty("store_id");
-      expect(updateCall).not.toHaveProperty("status");
-      expect(updateCall).not.toHaveProperty("availability");
-    });
-
-    it("should create a product.updated event", async () => {
-      await service.update("session-1", "product-1", {
-        name: "Updated",
-      });
-
-      expect(mocks.eventRepository.create).toHaveBeenCalledWith({
-        event_name: "product.updated",
-        session_id: "session-1",
-        user_id: "user-1",
-        store_id: "store-1",
-        product_id: "product-1",
+      expect(eventCreateSpy).toHaveBeenCalledWith({
+        event_name: "store.updated",
+        session_id: SESSION_ID,
+        user_id: USER_ID,
+        store_id: STORE_ID,
         metadata: {},
       });
     });
-
-    it("should update the product and event inside a transaction", async () => {
-      expect(mocks.database.transaction).not.toHaveBeenCalled();
-
-      await service.update("session-1", "product-1", {
-        name: "Updated",
-      });
-
-      expect(mocks.database.transaction).toHaveBeenCalledTimes(1);
-    });
-
-    it("should reject if the product disappears during update", async () => {
-      mocks.productRepository.update.mockResolvedValue(undefined);
-
-      await expect(
-        service.update("session-1", "product-1", {
-          name: "Updated",
-        }),
-      ).rejects.toMatchObject({
-        code: "PRODUCT_NOT_FOUND",
-      });
-    });
   });
 
-  // ============================================================
-  // SET AVAILABILITY
-  // ============================================================
+  // ---------------------------------------------------------------------------
+  // ACTIVATE
+  // ---------------------------------------------------------------------------
 
-  describe("setAvailability", () => {
-    it("should make an available product unavailable", async () => {
-      mocks.productRepository.setAvailability.mockResolvedValue(
-        unavailableProduct,
+  describe("activate", () => {
+    it("should activate an owned inactive store", async () => {
+      prepareAuthenticatedSession();
+
+      const store = createStore({
+        status: "inactive",
+      });
+
+      const activatedStore = createStore({
+        status: "active",
+      });
+
+      mocks.storeRepository.findById.mockResolvedValue(store);
+
+      storeSetStatusSpy.mockResolvedValue(activatedStore);
+
+      const result = await storeService.activate(
+        SESSION_ID,
+        STORE_ID,
       );
 
-      const result = await service.setAvailability(
-        "session-1",
-        "product-1",
-        "unavailable",
-      );
+      expect(result).toEqual(activatedStore);
 
-      expect(result).toEqual(unavailableProduct);
-
-      expect(mocks.productRepository.setAvailability).toHaveBeenCalledWith(
-        "product-1",
-        "unavailable",
-      );
-    });
-
-    it("should make an unavailable product available", async () => {
-      mocks.productRepository.findById.mockResolvedValue(unavailableProduct);
-
-      const availableAgain = {
-        ...activeProduct,
-        availability: "available" as const,
-      };
-
-      mocks.productRepository.setAvailability.mockResolvedValue(availableAgain);
-
-      const result = await service.setAvailability(
-        "session-1",
-        "product-1",
-        "available",
-      );
-
-      expect(result).toEqual(availableAgain);
-
-      expect(mocks.productRepository.setAvailability).toHaveBeenCalledWith(
-        "product-1",
-        "available",
-      );
-    });
-
-    it("should reject when the product does not exist", async () => {
-      mocks.productRepository.findById.mockResolvedValue(undefined);
-
-      await expect(
-        service.setAvailability("session-1", "product-1", "unavailable"),
-      ).rejects.toMatchObject({
-        code: "PRODUCT_NOT_FOUND",
-      });
-    });
-
-    it("should reject when the seller does not own the product", async () => {
-      mocks.storeRepository.findById.mockResolvedValue(otherOwnerStore);
-
-      await expect(
-        service.setAvailability("session-1", "product-1", "unavailable"),
-      ).rejects.toMatchObject({
-        code: "PRODUCT_FORBIDDEN",
-      });
-    });
-
-    it("should reject when the store is inactive", async () => {
-      mocks.storeRepository.findById.mockResolvedValue(inactiveStore);
-
-      await expect(
-        service.setAvailability("session-1", "product-1", "unavailable"),
-      ).rejects.toMatchObject({
-        code: "STORE_INACTIVE",
-      });
-    });
-
-    it("should reject availability change on an archived product", async () => {
-      mocks.productRepository.findById.mockResolvedValue(archivedProduct);
-
-      await expect(
-        service.setAvailability("session-1", "product-1", "available"),
-      ).rejects.toMatchObject({
-        code: "INVALID_PRODUCT_STATUS_TRANSITION",
-      });
-    });
-
-    it("should reject an invalid availability value", async () => {
-      await expect(
-        service.setAvailability("session-1", "product-1", "invalid" as any),
-      ).rejects.toMatchObject({
-        code: "INVALID_PRODUCT",
-      });
-    });
-
-    it("should reject when the requested availability is already active", async () => {
-      await expect(
-        service.setAvailability("session-1", "product-1", "available"),
-      ).rejects.toMatchObject({
-        code: "INVALID_PRODUCT_STATUS_TRANSITION",
-      });
-    });
-
-    it("should reject when the requested availability is already unavailable", async () => {
-      mocks.productRepository.findById.mockResolvedValue(unavailableProduct);
-
-      await expect(
-        service.setAvailability("session-1", "product-1", "unavailable"),
-      ).rejects.toMatchObject({
-        code: "INVALID_PRODUCT_STATUS_TRANSITION",
-      });
-    });
-
-    it("should create a product.availability_changed event", async () => {
-      mocks.productRepository.setAvailability.mockResolvedValue(
-        unavailableProduct,
-      );
-
-      await service.setAvailability("session-1", "product-1", "unavailable");
-
-      expect(mocks.eventRepository.create).toHaveBeenCalledWith({
-        event_name: "product.availability_changed",
-        session_id: "session-1",
-        user_id: "user-1",
-        store_id: "store-1",
-        product_id: "product-1",
-        metadata: {
-          from: "available",
-          to: "unavailable",
-        },
-      });
-    });
-
-    it("should execute the availability change inside a transaction", async () => {
-      await service.setAvailability("session-1", "product-1", "unavailable");
-
-      expect(mocks.database.transaction).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  // ============================================================
-  // ARCHIVE
-  // ============================================================
-
-  describe("archive", () => {
-    it("should archive an active product", async () => {
-      mocks.productRepository.setStatus.mockResolvedValue(archivedProduct);
-
-      const result = await service.archive("session-1", "product-1");
-
-      expect(result).toEqual(archivedProduct);
-
-      expect(mocks.productRepository.setStatus).toHaveBeenCalledWith(
-        "product-1",
-        "archived",
-      );
-    });
-
-    it("should reject when the product does not exist", async () => {
-      mocks.productRepository.findById.mockResolvedValue(undefined);
-
-      await expect(
-        service.archive("session-1", "product-1"),
-      ).rejects.toMatchObject({
-        code: "PRODUCT_NOT_FOUND",
-      });
-    });
-
-    it("should reject when the seller does not own the product", async () => {
-      mocks.storeRepository.findById.mockResolvedValue(otherOwnerStore);
-
-      await expect(
-        service.archive("session-1", "product-1"),
-      ).rejects.toMatchObject({
-        code: "PRODUCT_FORBIDDEN",
-      });
-    });
-
-    it("should reject when the store is inactive", async () => {
-      mocks.storeRepository.findById.mockResolvedValue(inactiveStore);
-
-      await expect(
-        service.archive("session-1", "product-1"),
-      ).rejects.toMatchObject({
-        code: "STORE_INACTIVE",
-      });
-    });
-
-    it("should reject archiving an already archived product", async () => {
-      mocks.productRepository.findById.mockResolvedValue(archivedProduct);
-
-      await expect(
-        service.archive("session-1", "product-1"),
-      ).rejects.toMatchObject({
-        code: "INVALID_PRODUCT_STATUS_TRANSITION",
-      });
-    });
-
-    it("should create a product.archived event", async () => {
-      mocks.productRepository.setStatus.mockResolvedValue(archivedProduct);
-
-      await service.archive("session-1", "product-1");
-
-      expect(mocks.eventRepository.create).toHaveBeenCalledWith({
-        event_name: "product.archived",
-        session_id: "session-1",
-        user_id: "user-1",
-        store_id: "store-1",
-        product_id: "product-1",
-        metadata: {},
-      });
-    });
-
-    it("should execute archive and event inside a transaction", async () => {
-      await service.archive("session-1", "product-1");
-
-      expect(mocks.database.transaction).toHaveBeenCalledTimes(1);
-    });
-
-    it("should reject if the product disappears during archive", async () => {
-      mocks.productRepository.setStatus.mockResolvedValue(undefined);
-
-      await expect(
-        service.archive("session-1", "product-1"),
-      ).rejects.toMatchObject({
-        code: "PRODUCT_NOT_FOUND",
-      });
-    });
-  });
-
-  // ============================================================
-  // UNARCHIVE
-  // ============================================================
-
-  describe("unarchive", () => {
-    beforeEach(() => {
-      mocks.productRepository.findById.mockResolvedValue(archivedProduct);
-
-      mocks.productRepository.setStatus.mockResolvedValue({
-        ...archivedProduct,
-        status: "active" as const,
-      });
-    });
-
-    it("should unarchive an archived product", async () => {
-      const result = await service.unarchive("session-1", "product-1");
-
-      expect(result).toEqual(
-        expect.objectContaining({
-          status: "active",
-        }),
-      );
-
-      expect(mocks.productRepository.setStatus).toHaveBeenCalledWith(
-        "product-1",
+      expect(storeSetStatusSpy).toHaveBeenCalledWith(
+        STORE_ID,
         "active",
       );
     });
 
-    it("should reject when the product does not exist", async () => {
-      mocks.productRepository.findById.mockResolvedValue(undefined);
+    it("should reject activating an already active store", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findById.mockResolvedValue(
+        createStore({
+          status: "active",
+        }),
+      );
 
       await expect(
-        service.unarchive("session-1", "product-1"),
+        storeService.activate(SESSION_ID, STORE_ID),
       ).rejects.toMatchObject({
-        code: "PRODUCT_NOT_FOUND",
+        code: "INVALID_STORE_STATUS_TRANSITION",
+      });
+
+      expect(mockDatabase.transaction).not.toHaveBeenCalled();
+
+      expect(storeSetStatusSpy).not.toHaveBeenCalled();
+    });
+
+    it("should reject activating a nonexistent store", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findById.mockResolvedValue(undefined);
+
+      await expect(
+        storeService.activate(SESSION_ID, STORE_ID),
+      ).rejects.toMatchObject({
+        code: "STORE_NOT_FOUND",
+      });
+
+      expect(mockDatabase.transaction).not.toHaveBeenCalled();
+    });
+
+    it("should reject activation by a non-owner", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findById.mockResolvedValue(
+        createStore({
+          owner_id: OTHER_USER_ID,
+          status: "inactive",
+        }),
+      );
+
+      await expect(
+        storeService.activate(SESSION_ID, STORE_ID),
+      ).rejects.toMatchObject({
+        code: "STORE_FORBIDDEN",
+      });
+
+      expect(mockDatabase.transaction).not.toHaveBeenCalled();
+    });
+
+    it("should reject when the repository cannot activate the store", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findById.mockResolvedValue(
+        createStore({
+          status: "inactive",
+        }),
+      );
+
+      storeSetStatusSpy.mockResolvedValue(undefined);
+
+      await expect(
+        storeService.activate(SESSION_ID, STORE_ID),
+      ).rejects.toMatchObject({
+        code: "STORE_NOT_FOUND",
       });
     });
 
-    it("should reject when the seller does not own the product", async () => {
-      mocks.storeRepository.findById.mockResolvedValue(otherOwnerStore);
+    it("should create the store.activated event", async () => {
+      prepareAuthenticatedSession();
 
-      await expect(
-        service.unarchive("session-1", "product-1"),
-      ).rejects.toMatchObject({
-        code: "PRODUCT_FORBIDDEN",
-      });
-    });
+      mocks.storeRepository.findById.mockResolvedValue(
+        createStore({
+          status: "inactive",
+        }),
+      );
 
-    it("should reject when the store is inactive", async () => {
-      mocks.storeRepository.findById.mockResolvedValue(inactiveStore);
+      storeSetStatusSpy.mockResolvedValue(
+        createStore({
+          status: "active",
+        }),
+      );
 
-      await expect(
-        service.unarchive("session-1", "product-1"),
-      ).rejects.toMatchObject({
-        code: "STORE_INACTIVE",
-      });
-    });
+      await storeService.activate(SESSION_ID, STORE_ID);
 
-    it("should reject unarchiving an active product", async () => {
-      mocks.productRepository.findById.mockResolvedValue(activeProduct);
-
-      await expect(
-        service.unarchive("session-1", "product-1"),
-      ).rejects.toMatchObject({
-        code: "INVALID_PRODUCT_STATUS_TRANSITION",
-      });
-    });
-
-    it("should create a product.unarchived event", async () => {
-      await service.unarchive("session-1", "product-1");
-
-      expect(mocks.eventRepository.create).toHaveBeenCalledWith({
-        event_name: "product.unarchived",
-        session_id: "session-1",
-        user_id: "user-1",
-        store_id: "store-1",
-        product_id: "product-1",
+      expect(eventCreateSpy).toHaveBeenCalledWith({
+        event_name: "store.activated",
+        session_id: SESSION_ID,
+        user_id: USER_ID,
+        store_id: STORE_ID,
         metadata: {},
       });
     });
+  });
 
-    it("should execute unarchive and event inside a transaction", async () => {
-      await service.unarchive("session-1", "product-1");
+  // ---------------------------------------------------------------------------
+  // DEACTIVATE
+  // ---------------------------------------------------------------------------
 
-      expect(mocks.database.transaction).toHaveBeenCalledTimes(1);
+  describe("deactivate", () => {
+    it("should deactivate an owned active store", async () => {
+      prepareAuthenticatedSession();
+
+      const store = createStore({
+        status: "active",
+      });
+
+      const deactivatedStore = createStore({
+        status: "inactive",
+      });
+
+      mocks.storeRepository.findById.mockResolvedValue(store);
+
+      storeSetStatusSpy.mockResolvedValue(deactivatedStore);
+
+      const result = await storeService.deactivate(
+        SESSION_ID,
+        STORE_ID,
+      );
+
+      expect(result).toEqual(deactivatedStore);
+
+      expect(storeSetStatusSpy).toHaveBeenCalledWith(
+        STORE_ID,
+        "inactive",
+      );
     });
 
-    it("should reject if the product disappears during unarchive", async () => {
-      mocks.productRepository.setStatus.mockResolvedValue(undefined);
+    it("should reject deactivating an already inactive store", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findById.mockResolvedValue(
+        createStore({
+          status: "inactive",
+        }),
+      );
 
       await expect(
-        service.unarchive("session-1", "product-1"),
+        storeService.deactivate(SESSION_ID, STORE_ID),
       ).rejects.toMatchObject({
-        code: "PRODUCT_NOT_FOUND",
+        code: "INVALID_STORE_STATUS_TRANSITION",
+      });
+
+      expect(mockDatabase.transaction).not.toHaveBeenCalled();
+
+      expect(storeSetStatusSpy).not.toHaveBeenCalled();
+    });
+
+    it("should reject deactivating a nonexistent store", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findById.mockResolvedValue(undefined);
+
+      await expect(
+        storeService.deactivate(SESSION_ID, STORE_ID),
+      ).rejects.toMatchObject({
+        code: "STORE_NOT_FOUND",
+      });
+
+      expect(mockDatabase.transaction).not.toHaveBeenCalled();
+    });
+
+    it("should reject deactivation by a non-owner", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findById.mockResolvedValue(
+        createStore({
+          owner_id: OTHER_USER_ID,
+          status: "active",
+        }),
+      );
+
+      await expect(
+        storeService.deactivate(SESSION_ID, STORE_ID),
+      ).rejects.toMatchObject({
+        code: "STORE_FORBIDDEN",
+      });
+
+      expect(mockDatabase.transaction).not.toHaveBeenCalled();
+    });
+
+    it("should reject when the repository cannot deactivate the store", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findById.mockResolvedValue(
+        createStore({
+          status: "active",
+        }),
+      );
+
+      storeSetStatusSpy.mockResolvedValue(undefined);
+
+      await expect(
+        storeService.deactivate(SESSION_ID, STORE_ID),
+      ).rejects.toMatchObject({
+        code: "STORE_NOT_FOUND",
+      });
+    });
+
+    it("should create the store.deactivated event", async () => {
+      prepareAuthenticatedSession();
+
+      mocks.storeRepository.findById.mockResolvedValue(
+        createStore({
+          status: "active",
+        }),
+      );
+
+      storeSetStatusSpy.mockResolvedValue(
+        createStore({
+          status: "inactive",
+        }),
+      );
+
+      await storeService.deactivate(SESSION_ID, STORE_ID);
+
+      expect(eventCreateSpy).toHaveBeenCalledWith({
+        event_name: "store.deactivated",
+        session_id: SESSION_ID,
+        user_id: USER_ID,
+        store_id: STORE_ID,
+        metadata: {},
       });
     });
   });
 });
+
