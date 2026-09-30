@@ -16,8 +16,13 @@ export class NotificationWorkerRunner {
     private readonly worker: NotificationWorker,
     options: NotificationWorkerRunnerOptions = {},
   ) {
-    this.pollIntervalMs =
-      options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+    const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+
+    if (!Number.isFinite(pollIntervalMs) || pollIntervalMs < 0) {
+      throw new Error("pollIntervalMs must be a finite non-negative number.");
+    }
+
+    this.pollIntervalMs = pollIntervalMs;
   }
 
   start(): void {
@@ -49,21 +54,15 @@ export class NotificationWorkerRunner {
     try {
       await this.worker.processNext();
     } catch (error) {
-      console.error(
-        "Notification worker error:",
-        error,
-      );
+      console.error("Notification worker error:", error);
     } finally {
       this.running = false;
 
       if (!this.stopped) {
-        this.timer = setTimeout(
-          () => {
-            this.timer = null;
-            void this.run();
-          },
-          this.pollIntervalMs,
-        );
+        this.timer = setTimeout(() => {
+          this.timer = null;
+          void this.run();
+        }, this.pollIntervalMs);
       }
     }
   }

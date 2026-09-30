@@ -1,4 +1,6 @@
 import { randomBytes } from "node:crypto";
+import { NotificationService } from "./notification.service.js";
+import { NotificationType } from "../notifications/types/notification-type.js";
 import db from "../database/knex.js";
 import { OrderRepository, } from "../database/repositories/order.repository.js";
 import { ProductRepository } from "../database/repositories/product.repository.js";
@@ -38,7 +40,8 @@ export class OrderService {
     cartItemRepository;
     storeRepository;
     productRepository;
-    constructor(database = db, orderRepository = new OrderRepository(database), sessionRepository = new SessionRepository(database), cartRepository = new CartRepository(database), cartItemRepository = new CartItemRepository(database), storeRepository = new StoreRepository(database), productRepository = new ProductRepository(database)) {
+    notificationService;
+    constructor(database = db, orderRepository = new OrderRepository(database), sessionRepository = new SessionRepository(database), cartRepository = new CartRepository(database), cartItemRepository = new CartItemRepository(database), storeRepository = new StoreRepository(database), productRepository = new ProductRepository(database), notificationService = new NotificationService(undefined, undefined, database)) {
         this.database = database;
         this.orderRepository = orderRepository;
         this.sessionRepository = sessionRepository;
@@ -46,6 +49,7 @@ export class OrderService {
         this.cartItemRepository = cartItemRepository;
         this.storeRepository = storeRepository;
         this.productRepository = productRepository;
+        this.notificationService = notificationService;
     }
     validateCartItems(items) {
         const storeId = items[0]?.product_store_id;
@@ -252,6 +256,32 @@ export class OrderService {
                     currency: PLATFORM_CURRENCY,
                 },
             });
+            await this.notificationService.create({
+                user_id: store.owner_id,
+                type: NotificationType.NEW_ORDER_FOR_SELLER,
+                title: "Nouvelle commande",
+                body: `Vous avez reçu une nouvelle commande ${createdOrder.reference}.`,
+                data: {
+                    order_id: createdOrder.id,
+                    order_reference: createdOrder.reference,
+                    total_amount: totalAmount,
+                    currency: PLATFORM_CURRENCY,
+                },
+            }, trx);
+            if (session.user_id) {
+                await this.notificationService.create({
+                    user_id: session.user_id,
+                    type: NotificationType.NEW_ORDER_FOR_BUYER,
+                    title: "Commande créée",
+                    body: `Votre commande ${createdOrder.reference} a été créée.`,
+                    data: {
+                        order_id: createdOrder.id,
+                        order_reference: createdOrder.reference,
+                        total_amount: totalAmount,
+                        currency: PLATFORM_CURRENCY,
+                    },
+                }, trx);
+            }
             return {
                 ...createdOrder,
                 items: [orderItem],
@@ -365,6 +395,32 @@ export class OrderService {
                     currency: PLATFORM_CURRENCY,
                 },
             });
+            await this.notificationService.create({
+                user_id: store.owner_id,
+                type: NotificationType.NEW_ORDER_FOR_SELLER,
+                title: "Nouvelle commande",
+                body: `Vous avez reçu une nouvelle commande ${createdOrder.reference}.`,
+                data: {
+                    order_id: createdOrder.id,
+                    order_reference: createdOrder.reference,
+                    total_amount: totalAmount,
+                    currency: PLATFORM_CURRENCY,
+                },
+            }, trx);
+            if (session.user_id) {
+                await this.notificationService.create({
+                    user_id: session.user_id,
+                    type: NotificationType.NEW_ORDER_FOR_BUYER,
+                    title: "Commande créée",
+                    body: `Votre commande ${createdOrder.reference} a été créée.`,
+                    data: {
+                        order_id: createdOrder.id,
+                        order_reference: createdOrder.reference,
+                        total_amount: totalAmount,
+                        currency: PLATFORM_CURRENCY,
+                    },
+                }, trx);
+            }
             await trxCartItemRepository.deleteByCartId(cart.id);
             return createdOrder;
         });

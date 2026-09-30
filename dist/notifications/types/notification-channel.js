@@ -9,8 +9,5 @@ const notificationChannels = {
     ],
 };
 export function getNotificationChannels(type) {
-    if (!Object.values(NotificationType).includes(type)) {
-        throw new Error(`Unsupported notification type: ${type}`);
-    }
-    return notificationChannels[type];
+    return (notificationChannels[type] ?? ["in_app"]);
 }

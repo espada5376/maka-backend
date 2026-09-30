@@ -52,9 +52,7 @@ describe("app", () => {
         user_id: "user-1",
       });
 
-      expect(sessionService.getValidById).toHaveBeenCalledWith(
-        "session-1",
-      );
+      expect(sessionService.getValidById).toHaveBeenCalledWith("session-1");
 
       expect(sessionService.create).not.toHaveBeenCalled();
     } finally {
@@ -71,75 +69,70 @@ describe("app", () => {
     }
   });
 
-it("should mount the user routes", async () => {
-  const sessionService = {
-    getValidById: vi.fn(),
-    create: vi.fn().mockResolvedValue({
-      id: "session-1",
-      user_id: null,
-      created_at: new Date(),
-      last_seen_at: new Date(),
-      expires_at: new Date(Date.now() + 60 * 60 * 1000),
-    }),
-  } as unknown as SessionService;
+  it("should mount the user routes", async () => {
+    const sessionService = {
+      getValidById: vi.fn(),
+      create: vi.fn().mockResolvedValue({
+        id: "session-1",
+        user_id: null,
+        created_at: new Date(),
+        last_seen_at: new Date(),
+        expires_at: new Date(Date.now() + 60 * 60 * 1000),
+      }),
+    } as unknown as SessionService;
 
-  const userController = {
-    getById: vi.fn((req, res) => {
-      res.status(200).json({
+    const userController = {
+      getById: vi.fn((req, res) => {
+        res.status(200).json({
+          success: true,
+          data: {
+            id: req.params.id,
+          },
+        });
+      }),
+      create: vi.fn(),
+      update: vi.fn(),
+      markPhoneAsVerified: vi.fn(),
+    } as unknown as UserController;
+
+    const app = createApp(sessionService, userController);
+
+    const server = app.listen(0);
+
+    try {
+      const address = server.address();
+
+      if (!address || typeof address === "string") {
+        throw new Error("Unable to determine test server address");
+      }
+
+      const response = await fetch(
+        `http://127.0.0.1:${address.port}/api/v1/users/user-1`,
+      );
+
+      expect(response.status).toBe(200);
+
+      await expect(response.json()).resolves.toEqual({
         success: true,
         data: {
-          id: req.params.id,
+          id: "user-1",
         },
       });
-    }),
-    create: vi.fn(),
-    update: vi.fn(),
-    markPhoneAsVerified: vi.fn(),
-  } as unknown as UserController;
 
-  const app = createApp(
-    sessionService,
-    userController,
-  );
+      expect(userController.getById).toHaveBeenCalledOnce();
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
 
-  const server = app.listen(0);
-
-  try {
-    const address = server.address();
-
-    if (!address || typeof address === "string") {
-      throw new Error(
-        "Unable to determine test server address",
-      );
-    }
-
-    const response = await fetch(
-      `http://127.0.0.1:${address.port}/api/v1/users/user-1`,
-    );
-
-    expect(response.status).toBe(200);
-
-    await expect(response.json()).resolves.toEqual({
-      success: true,
-      data: {
-        id: "user-1",
-      },
-    });
-
-    expect(userController.getById).toHaveBeenCalledOnce();
-  } finally {
-    await new Promise<void>((resolve, reject) => {
-      server.close((error) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-
-        resolve();
+          resolve();
+        });
       });
-    });
-  }
-});
+    }
+  });
 
   it("should create an anonymous session when no session cookie exists", async () => {
     const session: Session = {

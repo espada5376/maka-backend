@@ -7,8 +7,11 @@ export class NotificationWorkerRunner {
     stopped = true;
     constructor(worker, options = {}) {
         this.worker = worker;
-        this.pollIntervalMs =
-            options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+        const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+        if (!Number.isFinite(pollIntervalMs) || pollIntervalMs < 0) {
+            throw new Error("pollIntervalMs must be a finite non-negative number.");
+        }
+        this.pollIntervalMs = pollIntervalMs;
     }
     start() {
         if (!this.stopped) {

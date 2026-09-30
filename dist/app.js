@@ -5,7 +5,9 @@ import cookieParser from "cookie-parser";
 import { errorMiddleware } from "./common/middlewares/error.middleware.js";
 import { createSessionMiddleware } from "./common/middlewares/session.middleware.js";
 import { SessionService } from "./services/session.service.js";
-export function createApp(sessionService = new SessionService()) {
+import { UserController } from "./controllers/user.controller.js";
+import { createUserRouter } from "./routes/user.routes.js";
+export function createApp(sessionService = new SessionService(), userController = new UserController()) {
     const app = express();
     app.use(helmet());
     app.use(cors({
@@ -16,6 +18,7 @@ export function createApp(sessionService = new SessionService()) {
     app.use(express.urlencoded({ extended: true }));
     app.use(cookieParser());
     app.use(createSessionMiddleware(sessionService));
+    app.use("/api/v1/users", createUserRouter(userController));
     app.get("/api/health", (_req, res) => {
         res.status(200).json({
             success: true,

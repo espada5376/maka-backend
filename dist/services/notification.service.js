@@ -1,7 +1,7 @@
 import db from "../database/knex.js";
+import { NotificationRepository, } from "../database/repositories/notification.repository.js";
 import { NotificationDeliveryRepository, } from "../database/repositories/notification-delivery.repository.js";
 import { getNotificationChannels, } from "../notifications/types/notification-channel.js";
-import { NotificationRepository, } from "../database/repositories/notification.repository.js";
 import { Errors } from "../common/errors/errors.js";
 import { createAppError } from "../common/errors/create-app-error.js";
 export class NotificationService {
@@ -32,13 +32,14 @@ export class NotificationService {
         const normalizedUserId = this.normalizeUserId(userId);
         return this.notificationRepository.countUnreadByUserId(normalizedUserId);
     }
-    async create(data) {
+    async create(data, database = this.database) {
         const userId = this.normalizeUserId(data.user_id);
         const type = this.normalizeType(data.type);
         const title = this.normalizeTitle(data.title);
         const body = this.normalizeBody(data.body);
         const notificationData = this.validateData(data.data);
-        return this.database.transaction(async (transaction) => {
+        const channels = getNotificationChannels(type);
+        const createNotification = async (transaction) => {
             const notification = await this.notificationRepository.create({
                 user_id: userId,
                 type,
@@ -46,7 +47,6 @@ export class NotificationService {
                 body,
                 data: notificationData,
             }, transaction);
-            const channels = getNotificationChannels(type);
             if (channels.includes("whatsapp")) {
                 await this.notificationDeliveryRepository.create({
                     notification_id: notification.id,
@@ -54,7 +54,11 @@ export class NotificationService {
                 }, transaction);
             }
             return notification;
-        });
+        };
+        if (database === this.database) {
+            return this.database.transaction(createNotification);
+        }
+        return createNotification(database);
     }
     async markAsRead(id) {
         const notification = await this.notificationRepository.markAsRead(id);

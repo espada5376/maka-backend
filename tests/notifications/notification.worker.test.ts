@@ -2,21 +2,13 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import db from "../../src/database/knex.js";
 
-import {
-  NotificationDeliveryRepository,
-} from "../../src/database/repositories/notification-delivery.repository.js";
+import { NotificationDeliveryRepository } from "../../src/database/repositories/notification-delivery.repository.js";
 
-import {
-  WhatsAppProviderError,
-} from "../../src/notifications/providers/whatsapp.provider.js";
+import { WhatsAppProviderError } from "../../src/notifications/providers/whatsapp.provider.js";
 
-import {
-  NotificationRepository,
-} from "../../src/database/repositories/notification.repository.js";
+import { NotificationRepository } from "../../src/database/repositories/notification.repository.js";
 
-import {
-  UserRepository,
-} from "../../src/database/repositories/user.repository.js";
+import { UserRepository } from "../../src/database/repositories/user.repository.js";
 
 import { NotificationWorker } from "../../src/notifications/notification.worker.js";
 
@@ -39,14 +31,11 @@ describe("NotificationWorker", () => {
   beforeEach(async () => {
     await cleanDatabase();
 
-    notificationDeliveryRepository =
-      new NotificationDeliveryRepository(db);
+    notificationDeliveryRepository = new NotificationDeliveryRepository(db);
 
-    notificationRepository =
-      new NotificationRepository(db);
+    notificationRepository = new NotificationRepository(db);
 
-    userRepository =
-      new UserRepository(db);
+    userRepository = new UserRepository(db);
   });
 
   it("should send a pending notification through WhatsApp", async () => {
@@ -55,18 +44,16 @@ describe("NotificationWorker", () => {
       name: "Test User",
     });
 
-    const notification =
-      await notificationRepository.create({
-        user_id: user.id,
-        type: "order_created",
-        title: "Nouvelle commande",
-        body: "Votre commande a été créée.",
-      });
+    const notification = await notificationRepository.create({
+      user_id: user.id,
+      type: "order_created",
+      title: "Nouvelle commande",
+      body: "Votre commande a été créée.",
+    });
 
-    const delivery =
-      await notificationDeliveryRepository.create({
-        notification_id: notification.id,
-      });
+    const delivery = await notificationDeliveryRepository.create({
+      notification_id: notification.id,
+    });
 
     const sentMessages: WhatsAppMessage[] = [];
 
@@ -97,233 +84,285 @@ describe("NotificationWorker", () => {
       body: "Votre commande a été créée.",
     });
 
-    const updatedDelivery =
-      await notificationDeliveryRepository.findById(
-        delivery.id,
-      );
+    const updatedDelivery = await notificationDeliveryRepository.findById(
+      delivery.id,
+    );
 
     expect(updatedDelivery?.status).toBe("sent");
-    expect(updatedDelivery?.provider_message_id).toBe(
-      "wamid.test-123",
-    );
+    expect(updatedDelivery?.provider_message_id).toBe("wamid.test-123");
     expect(updatedDelivery?.attempts).toBe(1);
   });
 
-it("should return false when there is no pending delivery", async () => {
-  const whatsappProvider: WhatsAppProvider = {
-    send: async () => {
-      throw new Error("Provider should not be called");
-    },
-  };
+  it("should return false when there is no pending delivery", async () => {
+    const whatsappProvider: WhatsAppProvider = {
+      send: async () => {
+        throw new Error("Provider should not be called");
+      },
+    };
 
-  const worker = new NotificationWorker(
-    notificationDeliveryRepository,
-    notificationRepository,
-    userRepository,
-    whatsappProvider,
-  );
+    const worker = new NotificationWorker(
+      notificationDeliveryRepository,
+      notificationRepository,
+      userRepository,
+      whatsappProvider,
+    );
 
-  const processed = await worker.processNext();
+    const processed = await worker.processNext();
 
-  expect(processed).toBe(false);
-});
-
-it("should schedule a retry when WhatsApp sending fails", async () => {
-  const user = await userRepository.create({
-    phone: "22890000001",
-    name: "Retry User",
+    expect(processed).toBe(false);
   });
 
-  const notification =
-    await notificationRepository.create({
+  it("should schedule a retry when WhatsApp sending fails", async () => {
+    const user = await userRepository.create({
+      phone: "22890000001",
+      name: "Retry User",
+    });
+
+    const notification = await notificationRepository.create({
       user_id: user.id,
       type: "order_created",
       title: "Nouvelle commande",
       body: "Votre commande a été créée.",
     });
 
-  const delivery =
-    await notificationDeliveryRepository.create({
+    const delivery = await notificationDeliveryRepository.create({
       notification_id: notification.id,
     });
 
-  const whatsappProvider: WhatsAppProvider = {
-    send: async () => {
-      throw new Error("WhatsApp temporarily unavailable");
-    },
-  };
+    const whatsappProvider: WhatsAppProvider = {
+      send: async () => {
+        throw new Error("WhatsApp temporarily unavailable");
+      },
+    };
 
-  const worker = new NotificationWorker(
-    notificationDeliveryRepository,
-    notificationRepository,
-    userRepository,
-    whatsappProvider,
-  );
+    const worker = new NotificationWorker(
+      notificationDeliveryRepository,
+      notificationRepository,
+      userRepository,
+      whatsappProvider,
+    );
 
-  const processed = await worker.processNext();
+    const processed = await worker.processNext();
 
-  expect(processed).toBe(true);
+    expect(processed).toBe(true);
 
-  const updatedDelivery =
-    await notificationDeliveryRepository.findById(
+    const updatedDelivery = await notificationDeliveryRepository.findById(
       delivery.id,
     );
 
-  expect(updatedDelivery?.status).toBe("pending");
-  expect(updatedDelivery?.attempts).toBe(1);
-  expect(updatedDelivery?.processing_started_at).toBeNull();
-  expect(updatedDelivery?.next_attempt_at).not.toBeNull();
-  expect(updatedDelivery?.error_code).toBe(
-    "WHATSAPP_SEND_ERROR",
-  );
-  expect(updatedDelivery?.error_message).toBe(
-    "WhatsApp temporarily unavailable",
-  );
-});
-
-it("should mark the delivery as failed after the maximum attempts", async () => {
-  const user = await userRepository.create({
-    phone: "22890000002",
-    name: "Failed User",
+    expect(updatedDelivery?.status).toBe("pending");
+    expect(updatedDelivery?.attempts).toBe(1);
+    expect(updatedDelivery?.processing_started_at).toBeNull();
+    expect(updatedDelivery?.next_attempt_at).not.toBeNull();
+    expect(updatedDelivery?.error_code).toBe("WHATSAPP_SEND_ERROR");
+    expect(updatedDelivery?.error_message).toBe(
+      "WhatsApp temporarily unavailable",
+    );
   });
 
-  const notification =
-    await notificationRepository.create({
+  it("should mark the delivery as failed after the maximum attempts", async () => {
+    const user = await userRepository.create({
+      phone: "22890000002",
+      name: "Failed User",
+    });
+
+    const notification = await notificationRepository.create({
       user_id: user.id,
       type: "order_created",
       title: "Nouvelle commande",
       body: "Votre commande a été créée.",
     });
 
-  const delivery =
-    await notificationDeliveryRepository.create({
+    const delivery = await notificationDeliveryRepository.create({
       notification_id: notification.id,
     });
 
-  const whatsappProvider: WhatsAppProvider = {
-    send: async () => {
-      throw new Error("WhatsApp unavailable");
-    },
-  };
+    const whatsappProvider: WhatsAppProvider = {
+      send: async () => {
+        throw new Error("WhatsApp unavailable");
+      },
+    };
 
-  const worker = new NotificationWorker(
-    notificationDeliveryRepository,
-    notificationRepository,
-    userRepository,
-    whatsappProvider,
-  );
+    const worker = new NotificationWorker(
+      notificationDeliveryRepository,
+      notificationRepository,
+      userRepository,
+      whatsappProvider,
+    );
 
-  // Première tentative.
-  await worker.processNext();
+    // Première tentative.
+    await worker.processNext();
 
-  let updatedDelivery =
-    await notificationDeliveryRepository.findById(
+    let updatedDelivery = await notificationDeliveryRepository.findById(
       delivery.id,
     );
 
-  expect(updatedDelivery?.status).toBe("pending");
-  expect(updatedDelivery?.attempts).toBe(1);
+    expect(updatedDelivery?.status).toBe("pending");
+    expect(updatedDelivery?.attempts).toBe(1);
 
-  // Rendre le retry immédiatement disponible.
-  await db("notification_deliveries")
-    .where({ id: delivery.id })
-    .update({
+    // Rendre le retry immédiatement disponible.
+    await db("notification_deliveries").where({ id: delivery.id }).update({
       next_attempt_at: db.fn.now(),
     });
 
-  // Deuxième tentative.
-  await worker.processNext();
+    // Deuxième tentative.
+    await worker.processNext();
 
-  updatedDelivery =
-    await notificationDeliveryRepository.findById(
+    updatedDelivery = await notificationDeliveryRepository.findById(
       delivery.id,
     );
 
-  expect(updatedDelivery?.status).toBe("pending");
-  expect(updatedDelivery?.attempts).toBe(2);
+    expect(updatedDelivery?.status).toBe("pending");
+    expect(updatedDelivery?.attempts).toBe(2);
 
-  // Rendre le retry immédiatement disponible.
-  await db("notification_deliveries")
-    .where({ id: delivery.id })
-    .update({
+    // Rendre le retry immédiatement disponible.
+    await db("notification_deliveries").where({ id: delivery.id }).update({
       next_attempt_at: db.fn.now(),
     });
 
-  // Troisième et dernière tentative.
-  await worker.processNext();
+    // Troisième et dernière tentative.
+    await worker.processNext();
 
-  updatedDelivery =
-    await notificationDeliveryRepository.findById(
+    updatedDelivery = await notificationDeliveryRepository.findById(
       delivery.id,
     );
 
-  expect(updatedDelivery?.status).toBe("failed");
-  expect(updatedDelivery?.attempts).toBe(3);
-  expect(updatedDelivery?.processing_started_at).toBeNull();
-  expect(updatedDelivery?.next_attempt_at).toBeNull();
-  expect(updatedDelivery?.error_code).toBe(
-    "MAX_ATTEMPTS_EXCEEDED",
-  );
-  expect(updatedDelivery?.error_message).toBe(
-    "WhatsApp unavailable",
-  );
-});
-
-it("should permanently fail when WhatsApp returns a permanent error", async () => {
-  const user = await userRepository.create({
-    phone: "22890000004",
-    name: "Permanent Error User",
+    expect(updatedDelivery?.status).toBe("failed");
+    expect(updatedDelivery?.attempts).toBe(3);
+    expect(updatedDelivery?.processing_started_at).toBeNull();
+    expect(updatedDelivery?.next_attempt_at).toBeNull();
+    expect(updatedDelivery?.error_code).toBe("MAX_ATTEMPTS_EXCEEDED");
+    expect(updatedDelivery?.error_message).toBe("WhatsApp unavailable");
   });
 
-  const notification =
-    await notificationRepository.create({
+  it("should permanently fail when WhatsApp returns a permanent error", async () => {
+    const user = await userRepository.create({
+      phone: "22890000004",
+      name: "Permanent Error User",
+    });
+
+    const notification = await notificationRepository.create({
       user_id: user.id,
       type: "order_created",
       title: "Nouvelle commande",
       body: "Votre commande a été créée.",
     });
 
-  const delivery =
-    await notificationDeliveryRepository.create({
+    const delivery = await notificationDeliveryRepository.create({
       notification_id: notification.id,
     });
 
-  const whatsappProvider: WhatsAppProvider = {
-    send: async () => {
-      throw new WhatsAppProviderError(
-        "Recipient phone number is invalid",
-        "permanent",
-        "INVALID_RECIPIENT",
-      );
-    },
-  };
+    const whatsappProvider: WhatsAppProvider = {
+      send: async () => {
+        throw new WhatsAppProviderError(
+          "Recipient phone number is invalid",
+          "permanent",
+          "INVALID_RECIPIENT",
+        );
+      },
+    };
 
-  const worker = new NotificationWorker(
-    notificationDeliveryRepository,
-    notificationRepository,
-    userRepository,
-    whatsappProvider,
-  );
+    const worker = new NotificationWorker(
+      notificationDeliveryRepository,
+      notificationRepository,
+      userRepository,
+      whatsappProvider,
+    );
 
-  const processed = await worker.processNext();
+    const processed = await worker.processNext();
 
-  expect(processed).toBe(true);
+    expect(processed).toBe(true);
 
-  const updatedDelivery =
-    await notificationDeliveryRepository.findById(
+    const updatedDelivery = await notificationDeliveryRepository.findById(
       delivery.id,
     );
 
-  expect(updatedDelivery?.status).toBe("failed");
-  expect(updatedDelivery?.attempts).toBe(1);
-  expect(updatedDelivery?.next_attempt_at).toBeNull();
-  expect(updatedDelivery?.processing_started_at).toBeNull();
-  expect(updatedDelivery?.error_code).toBe(
-    "INVALID_RECIPIENT",
-  );
-  expect(updatedDelivery?.error_message).toBe(
-    "Recipient phone number is invalid",
-  );
-});
+    expect(updatedDelivery?.status).toBe("failed");
+    expect(updatedDelivery?.attempts).toBe(1);
+    expect(updatedDelivery?.next_attempt_at).toBeNull();
+    expect(updatedDelivery?.processing_started_at).toBeNull();
+    expect(updatedDelivery?.error_code).toBe("INVALID_RECIPIENT");
+    expect(updatedDelivery?.error_message).toBe(
+      "Recipient phone number is invalid",
+    );
+  });
 
+  it("should permanently fail when the notification does not exist", async () => {
+    const delivery = await notificationDeliveryRepository.create({
+      notification_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    });
+
+    const whatsappProvider: WhatsAppProvider = {
+      send: async () => {
+        throw new Error("Provider should not be called");
+      },
+    };
+
+    const worker = new NotificationWorker(
+      notificationDeliveryRepository,
+      notificationRepository,
+      userRepository,
+      whatsappProvider,
+    );
+
+    const processed = await worker.processNext();
+
+    expect(processed).toBe(true);
+
+    const updatedDelivery = await notificationDeliveryRepository.findById(
+      delivery.id,
+    );
+
+    expect(updatedDelivery?.status).toBe("failed");
+    expect(updatedDelivery?.attempts).toBe(1);
+    expect(updatedDelivery?.processing_started_at).toBeNull();
+    expect(updatedDelivery?.next_attempt_at).toBeNull();
+    expect(updatedDelivery?.error_code).toBe("NOTIFICATION_NOT_FOUND");
+    expect(updatedDelivery?.error_message).toBe(
+      "Notification associated with delivery was not found.",
+    );
+  });
+
+  it("should permanently fail when the notification user does not exist", async () => {
+    const notification = await notificationRepository.create({
+      user_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      type: "order_created",
+      title: "Nouvelle commande",
+      body: "Votre commande a été créée.",
+    });
+
+    const delivery = await notificationDeliveryRepository.create({
+      notification_id: notification.id,
+    });
+
+    const whatsappProvider: WhatsAppProvider = {
+      send: async () => {
+        throw new Error("Provider should not be called");
+      },
+    };
+
+    const worker = new NotificationWorker(
+      notificationDeliveryRepository,
+      notificationRepository,
+      userRepository,
+      whatsappProvider,
+    );
+
+    const processed = await worker.processNext();
+
+    expect(processed).toBe(true);
+
+    const updatedDelivery = await notificationDeliveryRepository.findById(
+      delivery.id,
+    );
+
+    expect(updatedDelivery?.status).toBe("failed");
+    expect(updatedDelivery?.attempts).toBe(1);
+    expect(updatedDelivery?.processing_started_at).toBeNull();
+    expect(updatedDelivery?.next_attempt_at).toBeNull();
+    expect(updatedDelivery?.error_code).toBe("USER_NOT_FOUND");
+    expect(updatedDelivery?.error_message).toBe(
+      "User associated with notification was not found.",
+    );
+  });
 });

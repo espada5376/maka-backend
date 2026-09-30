@@ -6,9 +6,12 @@ import cookieParser from "cookie-parser";
 import { errorMiddleware } from "./common/middlewares/error.middleware.js";
 import { createSessionMiddleware } from "./common/middlewares/session.middleware.js";
 import { SessionService } from "./services/session.service.js";
+import { UserController } from "./controllers/user.controller.js";
+import { createUserRouter } from "./routes/user.routes.js";
 
 export function createApp(
   sessionService: SessionService = new SessionService(),
+  userController: UserController = new UserController(),
 ) {
   const app = express();
 
@@ -26,6 +29,8 @@ export function createApp(
   app.use(cookieParser());
 
   app.use(createSessionMiddleware(sessionService));
+
+  app.use("/api/v1/users", createUserRouter(userController));
 
   app.get("/api/health", (_req, res) => {
     res.status(200).json({
