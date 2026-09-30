@@ -30,8 +30,8 @@ export class NotificationRepository {
             .first();
         return Number(result?.count ?? 0);
     }
-    async create(data) {
-        const [notification] = await this.database("notifications")
+    async create(data, database = this.database) {
+        const [notification] = await database("notifications")
             .insert({
             user_id: data.user_id,
             type: data.type,

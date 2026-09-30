@@ -237,4 +237,36 @@ export const Errors = {
     message: "Invalid insight status",
     statusCode: 400,
   },
+
+  USER_NOT_FOUND: {
+  code: "USER_NOT_FOUND",
+  message: "User not found",
+  statusCode: 404,
+},
+
+INVALID_NAME: {
+  code: "INVALID_NAME",
+  message: "Invalid user name",
+  statusCode: 400,
+},
+
+INVALID_PHONE: {
+  code: "INVALID_PHONE",
+  message: "Invalid phone number",
+  statusCode: 400,
+},
+
+PHONE_ALREADY_EXISTS: {
+  code: "PHONE_ALREADY_EXISTS",
+  message: "A user already exists with this phone number",
+  statusCode: 409,
+},
+
+INVALID_USER_STATUS: {
+  code: "INVALID_USER_STATUS",
+  message: "Invalid user status",
+  statusCode: 400,
+},
+
+
 } as const;

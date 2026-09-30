@@ -24,6 +24,16 @@ export class SessionService {
         }
         return session;
     }
+    async getValidById(id) {
+        const session = await this.sessionRepository.findById(id);
+        if (!session) {
+            return undefined;
+        }
+        if (session.expires_at.getTime() <= Date.now()) {
+            return undefined;
+        }
+        return session;
+    }
     async getByUserId(userId) {
         return this.sessionRepository.findByUserId(userId);
     }

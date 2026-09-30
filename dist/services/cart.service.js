@@ -117,6 +117,9 @@ export class CartService {
                     quantity,
                 });
             }
+            if (!item) {
+                throw new CartServiceError(CartErrorCode.ITEM_NOT_FOUND, "Unable to create or update cart item");
+            }
             await transactionEventRepository.create({
                 event_name: "cart.item_added",
                 event_key: `cart:${cart.id}:item:${item.id}:added`,
@@ -154,6 +157,9 @@ export class CartService {
             const updatedItem = await transactionCartItemRepository.updateQuantity(item.id, {
                 quantity,
             });
+            if (!updatedItem) {
+                throw new CartServiceError(CartErrorCode.ITEM_NOT_FOUND, "Cart item not found");
+            }
             await transactionEventRepository.create({
                 event_name: "cart.item_quantity_updated",
                 event_key: `cart:${cart.id}:item:${item.id}:quantity-updated`,

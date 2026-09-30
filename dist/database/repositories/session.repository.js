@@ -5,7 +5,9 @@ export class SessionRepository {
         this.database = database;
     }
     async findById(id) {
-        return this.database("sessions").where({ id }).first();
+        return this.database("sessions")
+            .where({ id })
+            .first();
     }
     async findByUserId(userId) {
         return this.database("sessions")
@@ -29,6 +31,8 @@ export class SessionRepository {
         return session;
     }
     async delete(id) {
-        return this.database("sessions").where({ id }).del();
+        return this.database("sessions")
+            .where({ id })
+            .del();
     }
 }

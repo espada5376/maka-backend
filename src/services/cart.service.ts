@@ -1,3 +1,4 @@
+
 import { Knex } from "knex";
 
 import db from "../database/knex.js";
@@ -70,7 +71,7 @@ export class CartService {
       cart.id,
     );
 
-    const itemsWithState = items.map((item) => {
+    const itemsWithState: CartItemWithState[] = items.map((item) => {
       const available =
         item.store_status === "active" &&
         item.product_status === "active" &&
@@ -194,6 +195,13 @@ export class CartService {
         });
       }
 
+      if (!item) {
+        throw new CartServiceError(
+          CartErrorCode.ITEM_NOT_FOUND,
+          "Unable to create or update cart item",
+        );
+      }
+
       await transactionEventRepository.create({
         event_name: "cart.item_added",
         event_key: `cart:${cart.id}:item:${item.id}:added`,
@@ -259,6 +267,13 @@ export class CartService {
           quantity,
         },
       );
+
+      if (!updatedItem) {
+        throw new CartServiceError(
+          CartErrorCode.ITEM_NOT_FOUND,
+          "Cart item not found",
+        );
+      }
 
       await transactionEventRepository.create({
         event_name: "cart.item_quantity_updated",
@@ -345,3 +360,4 @@ export class CartService {
     }
   }
 }
+

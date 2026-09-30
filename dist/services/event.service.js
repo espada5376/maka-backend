@@ -35,7 +35,7 @@ export class EventServiceImpl {
             store_id: payload.storeId ?? null,
             product_id: payload.productId ?? null,
             order_id: payload.orderId ?? null,
-            metadata: payload.metadata ?? {},
+            metadata: (payload.metadata ?? {}),
             occurred_at: payload.occurredAt,
         });
     }

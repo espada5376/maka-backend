@@ -1,20 +1,6 @@
 import { UserRepository, } from "../database/repositories/user.repository.js";
-export var UserErrorCode;
-(function (UserErrorCode) {
-    UserErrorCode["USER_NOT_FOUND"] = "USER_NOT_FOUND";
-    UserErrorCode["INVALID_NAME"] = "INVALID_NAME";
-    UserErrorCode["INVALID_PHONE"] = "INVALID_PHONE";
-    UserErrorCode["PHONE_ALREADY_EXISTS"] = "PHONE_ALREADY_EXISTS";
-    UserErrorCode["INVALID_STATUS"] = "INVALID_STATUS";
-})(UserErrorCode || (UserErrorCode = {}));
-export class UserServiceError extends Error {
-    code;
-    constructor(code, message) {
-        super(message);
-        this.code = code;
-        this.name = "UserServiceError";
-    }
-}
+import { createAppError } from "../common/errors/create-app-error.js";
+import { Errors } from "../common/errors/errors.js";
 export class UserService {
     userRepository;
     constructor(userRepository = new UserRepository()) {
@@ -23,7 +9,7 @@ export class UserService {
     async getById(id) {
         const user = await this.userRepository.findById(id);
         if (!user) {
-            throw new UserServiceError(UserErrorCode.USER_NOT_FOUND, `User not found: ${id}`);
+            throw createAppError(Errors.USER_NOT_FOUND);
         }
         return user;
     }
@@ -31,7 +17,7 @@ export class UserService {
         const normalizedPhone = this.normalizePhone(phone);
         const user = await this.userRepository.findByPhone(normalizedPhone);
         if (!user) {
-            throw new UserServiceError(UserErrorCode.USER_NOT_FOUND, `User not found with phone: ${normalizedPhone}`);
+            throw createAppError(Errors.USER_NOT_FOUND);
         }
         return user;
     }
@@ -40,7 +26,7 @@ export class UserService {
         const name = this.normalizeName(data.name);
         const existingUser = await this.userRepository.findByPhone(phone);
         if (existingUser) {
-            throw new UserServiceError(UserErrorCode.PHONE_ALREADY_EXISTS, `A user already exists with phone: ${phone}`);
+            throw createAppError(Errors.PHONE_ALREADY_EXISTS);
         }
         return this.userRepository.create({
             phone,
@@ -53,12 +39,12 @@ export class UserService {
         if ("name" in data) {
             updateData.name = this.normalizeName(data.name);
         }
-        if ("status" in data) {
+        if (data.status !== undefined) {
             updateData.status = this.validateStatus(data.status);
         }
         const updatedUser = await this.userRepository.update(id, updateData);
         if (!updatedUser) {
-            throw new UserServiceError(UserErrorCode.USER_NOT_FOUND, `User not found: ${id}`);
+            throw createAppError(Errors.USER_NOT_FOUND);
         }
         return updatedUser;
     }
@@ -66,17 +52,17 @@ export class UserService {
         await this.getById(id);
         const user = await this.userRepository.markPhoneAsVerified(id);
         if (!user) {
-            throw new UserServiceError(UserErrorCode.USER_NOT_FOUND, `User not found: ${id}`);
+            throw createAppError(Errors.USER_NOT_FOUND);
         }
         return user;
     }
     normalizePhone(phone) {
         if (typeof phone !== "string") {
-            throw new UserServiceError(UserErrorCode.INVALID_PHONE, "Phone must be a string");
+            throw createAppError(Errors.INVALID_PHONE);
         }
         const normalizedPhone = phone.trim();
         if (!normalizedPhone || normalizedPhone.length > 20) {
-            throw new UserServiceError(UserErrorCode.INVALID_PHONE, "Phone must contain between 1 and 20 characters");
+            throw createAppError(Errors.INVALID_PHONE);
         }
         return normalizedPhone;
     }
@@ -85,17 +71,17 @@ export class UserService {
             return null;
         }
         if (typeof name !== "string") {
-            throw new UserServiceError(UserErrorCode.INVALID_NAME, "Name must be a string or null");
+            throw createAppError(Errors.INVALID_NAME);
         }
         const normalizedName = name.trim();
         if (!normalizedName || normalizedName.length > 100) {
-            throw new UserServiceError(UserErrorCode.INVALID_NAME, "Name must contain between 1 and 100 characters");
+            throw createAppError(Errors.INVALID_NAME);
         }
         return normalizedName;
     }
     validateStatus(status) {
         if (status !== "active" && status !== "inactive") {
-            throw new UserServiceError(UserErrorCode.INVALID_STATUS, "Status must be either active or inactive");
+            throw createAppError(Errors.INVALID_USER_STATUS);
         }
         return status;
     }

@@ -55,8 +55,12 @@ export class NotificationRepository {
     return Number(result?.count ?? 0);
   }
 
-  async create(data: CreateNotificationData): Promise<Notification> {
-    const [notification] = await this.database<Notification>("notifications")
+  async create(
+  data: CreateNotificationData,
+  database: Knex = this.database,
+): Promise<Notification> {
+  const [notification] =
+    await database<Notification>("notifications")
       .insert({
         user_id: data.user_id,
         type: data.type,
@@ -66,8 +70,8 @@ export class NotificationRepository {
       })
       .returning("*");
 
-    return notification;
-  }
+  return notification;
+}
 
   async markAsRead(id: string): Promise<Notification | undefined> {
     const [notification] = await this.database<Notification>("notifications")

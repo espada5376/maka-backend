@@ -1,6 +1,8 @@
 import type { Knex } from "knex";
 import { randomBytes } from "node:crypto";
 
+import { NotificationService } from "./notification.service.js";
+
 import db from "../database/knex.js";
 
 import {
@@ -111,14 +113,20 @@ function fromMinorUnits(value: number): number {
 
 export class OrderService implements IOrderService {
   constructor(
-    private readonly database: Knex = db,
-    private readonly orderRepository = new OrderRepository(database),
-    private readonly sessionRepository = new SessionRepository(database),
-    private readonly cartRepository = new CartRepository(database),
-    private readonly cartItemRepository = new CartItemRepository(database),
-    private readonly storeRepository = new StoreRepository(database),
-    private readonly productRepository = new ProductRepository(database),
-  ) {}
+  private readonly database: Knex = db,
+  private readonly orderRepository = new OrderRepository(database),
+  private readonly sessionRepository = new SessionRepository(database),
+  private readonly cartRepository = new CartRepository(database),
+  private readonly cartItemRepository = new CartItemRepository(database),
+  private readonly storeRepository = new StoreRepository(database),
+  private readonly productRepository = new ProductRepository(database),
+  private readonly notificationService: NotificationService =
+    new NotificationService(
+      undefined,
+      undefined,
+      database,
+    ),
+) {}
 
   private validateCartItems(items: CartItemWithProductContext[]): void {
     const storeId = items[0]?.product_store_id;
@@ -417,6 +425,40 @@ export class OrderService implements IOrderService {
         },
       });
 
+      await this.notificationService.create(
+  {
+    user_id: store.owner_id,
+    type: "new_order_for_seller",
+    title: "Nouvelle commande",
+    body: `Vous avez reçu une nouvelle commande ${createdOrder.reference}.`,
+    data: {
+      order_id: createdOrder.id,
+      order_reference: createdOrder.reference,
+      total_amount: totalAmount,
+      currency: PLATFORM_CURRENCY,
+    },
+  },
+  trx,
+);
+
+if (session.user_id) {
+  await this.notificationService.create(
+    {
+      user_id: session.user_id,
+      type: "new_order_for_buyer",
+      title: "Commande créée",
+      body: `Votre commande ${createdOrder.reference} a été créée.`,
+      data: {
+        order_id: createdOrder.id,
+        order_reference: createdOrder.reference,
+        total_amount: totalAmount,
+        currency: PLATFORM_CURRENCY,
+      },
+    },
+    trx,
+  );
+}
+
       return {
         ...createdOrder,
         items: [orderItem],
@@ -573,6 +615,40 @@ export class OrderService implements IOrderService {
           currency: PLATFORM_CURRENCY,
         },
       });
+      
+      await this.notificationService.create(
+  {
+    user_id: store.owner_id,
+    type: "new_order_for_seller",
+    title: "Nouvelle commande",
+    body: `Vous avez reçu une nouvelle commande ${createdOrder.reference}.`,
+    data: {
+      order_id: createdOrder.id,
+      order_reference: createdOrder.reference,
+      total_amount: totalAmount,
+      currency: PLATFORM_CURRENCY,
+    },
+  },
+  trx,
+);
+
+if (session.user_id) {
+  await this.notificationService.create(
+    {
+      user_id: session.user_id,
+      type: "new_order_for_buyer",
+      title: "Commande créée",
+      body: `Votre commande ${createdOrder.reference} a été créée.`,
+      data: {
+        order_id: createdOrder.id,
+        order_reference: createdOrder.reference,
+        total_amount: totalAmount,
+        currency: PLATFORM_CURRENCY,
+      },
+    },
+    trx,
+  );
+}
 
       await trxCartItemRepository.deleteByCartId(cart.id);
 

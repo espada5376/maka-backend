@@ -1,4 +1,3 @@
-
 import {
   beforeEach,
   describe,
@@ -7,11 +6,7 @@ import {
   vi,
 } from "vitest";
 
-import {
-  UserService,
-  UserServiceError,
-  UserErrorCode,
-} from "../../src/services/user.service.js";
+import { UserService } from "../../src/services/user.service.js";
 
 describe("UserService", () => {
   const userRepository = {
@@ -64,7 +59,7 @@ describe("UserService", () => {
       await expect(
         userService.getById("unknown"),
       ).rejects.toMatchObject({
-        code: UserErrorCode.USER_NOT_FOUND,
+        code: "USER_NOT_FOUND",
       });
     });
 
@@ -102,7 +97,7 @@ describe("UserService", () => {
       await expect(
         userService.getByPhone("+22890000000"),
       ).rejects.toMatchObject({
-        code: UserErrorCode.USER_NOT_FOUND,
+        code: "USER_NOT_FOUND",
       });
     });
 
@@ -223,7 +218,7 @@ describe("UserService", () => {
           name: "Koffi",
         }),
       ).rejects.toMatchObject({
-        code: UserErrorCode.INVALID_PHONE,
+        code: "INVALID_PHONE",
       });
 
       expect(
@@ -242,7 +237,7 @@ describe("UserService", () => {
           name: "Koffi",
         }),
       ).rejects.toMatchObject({
-        code: UserErrorCode.INVALID_PHONE,
+        code: "INVALID_PHONE",
       });
 
       expect(
@@ -257,7 +252,7 @@ describe("UserService", () => {
           name: "Koffi",
         }),
       ).rejects.toMatchObject({
-        code: UserErrorCode.INVALID_PHONE,
+        code: "INVALID_PHONE",
       });
 
       expect(
@@ -272,7 +267,7 @@ describe("UserService", () => {
           name: "",
         }),
       ).rejects.toMatchObject({
-        code: UserErrorCode.INVALID_NAME,
+        code: "INVALID_NAME",
       });
 
       expect(
@@ -287,7 +282,7 @@ describe("UserService", () => {
           name: "     ",
         }),
       ).rejects.toMatchObject({
-        code: UserErrorCode.INVALID_NAME,
+        code: "INVALID_NAME",
       });
 
       expect(
@@ -302,7 +297,7 @@ describe("UserService", () => {
           name: "a".repeat(101),
         }),
       ).rejects.toMatchObject({
-        code: UserErrorCode.INVALID_NAME,
+        code: "INVALID_NAME",
       });
 
       expect(
@@ -321,7 +316,7 @@ describe("UserService", () => {
           name: "Autre utilisateur",
         }),
       ).rejects.toMatchObject({
-        code: UserErrorCode.PHONE_ALREADY_EXISTS,
+        code: "PHONE_ALREADY_EXISTS",
       });
 
       expect(
@@ -450,7 +445,7 @@ describe("UserService", () => {
           name: "",
         }),
       ).rejects.toMatchObject({
-        code: UserErrorCode.INVALID_NAME,
+        code: "INVALID_NAME",
       });
 
       expect(
@@ -466,7 +461,7 @@ describe("UserService", () => {
           name: "     ",
         }),
       ).rejects.toMatchObject({
-        code: UserErrorCode.INVALID_NAME,
+        code: "INVALID_NAME",
       });
 
       expect(
@@ -482,7 +477,7 @@ describe("UserService", () => {
           name: "a".repeat(101),
         }),
       ).rejects.toMatchObject({
-        code: UserErrorCode.INVALID_NAME,
+        code: "INVALID_NAME",
       });
 
       expect(
@@ -554,7 +549,7 @@ describe("UserService", () => {
           status: "blocked" as any,
         }),
       ).rejects.toMatchObject({
-        code: UserErrorCode.INVALID_STATUS,
+        code: "INVALID_USER_STATUS",
       });
 
       expect(
@@ -572,7 +567,7 @@ describe("UserService", () => {
           name: "Koffi",
         }),
       ).rejects.toMatchObject({
-        code: UserErrorCode.USER_NOT_FOUND,
+        code: "USER_NOT_FOUND",
       });
 
       expect(
@@ -630,7 +625,7 @@ describe("UserService", () => {
       await expect(
         userService.markPhoneAsVerified("unknown"),
       ).rejects.toMatchObject({
-        code: UserErrorCode.USER_NOT_FOUND,
+        code: "USER_NOT_FOUND",
       });
 
       expect(
@@ -651,20 +646,4 @@ describe("UserService", () => {
       ).rejects.toBe(error);
     });
   });
-
-  // ---------------------------------------------------------------------------
-  // ERROR TYPE
-  // ---------------------------------------------------------------------------
-
-  it("should expose a CategoryServiceError-compatible error type", () => {
-    const error = new UserServiceError(
-      UserErrorCode.USER_NOT_FOUND,
-      "User not found",
-    );
-
-    expect(error).toBeInstanceOf(UserServiceError);
-    expect(error).toBeInstanceOf(Error);
-    expect(error.code).toBe(UserErrorCode.USER_NOT_FOUND);
-  });
 });
-

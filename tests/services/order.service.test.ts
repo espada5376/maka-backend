@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Knex } from "knex";
 
 import { OrderService } from "../../src/services/order.service.js";
+import { NotificationService } from "../../src/services/notification.service.js";
 
 import {
   OrderRepository,
@@ -36,6 +37,7 @@ describe("OrderService", () => {
   const CART_ID = "77777777-7777-7777-7777-777777777777";
 
   const USER_ID = "88888888-8888-8888-8888-888888888888";
+  const BUYER_USER_ID = "99999999-9999-9999-9999-999999999999";
 
   const CATEGORY_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 
@@ -60,6 +62,9 @@ describe("OrderService", () => {
   const mockDatabase = {
     transaction: vi.fn(),
   };
+
+  const mockTransaction = {} as Knex;
+
 
   const mocks = {
     orderRepository: {
@@ -95,6 +100,10 @@ describe("OrderService", () => {
     productRepository: {
       findById: vi.fn(),
     },
+
+    notificationService: {
+  create: vi.fn(),
+},
   };
 
   let orderService: OrderService;
@@ -294,13 +303,28 @@ describe("OrderService", () => {
 
     Object.values(mocks.productRepository).forEach((mock) => mock.mockReset());
 
+    Object.values(mocks.notificationService).forEach((mock) =>
+  mock.mockReset(),
+);
+
+  mocks.notificationService.create.mockResolvedValue({
+  id: "notification-1",
+  user_id: USER_ID,
+  type: "new_order_for_seller",
+  title: "Nouvelle commande",
+  body: "Vous avez reçu une nouvelle commande.",
+  data: {},
+  read_at: null,
+  created_at: new Date(),
+});
+
     mockDatabase.transaction.mockReset();
 
     mockDatabase.transaction.mockImplementation(
-      async (callback: (trx: Knex) => Promise<unknown>) => {
-        return callback({} as Knex);
-      },
-    );
+  async (callback: (trx: Knex) => Promise<unknown>) => {
+    return callback(mockTransaction);
+  },
+);
 
     mocks.orderRepository.findItems.mockResolvedValue([]);
 
@@ -326,17 +350,17 @@ describe("OrderService", () => {
       .spyOn(CartItemRepository.prototype, "deleteByCartId")
       .mockResolvedValue(1);
 
-    orderService = new OrderService(
-      mockDatabase as unknown as Knex,
-      mocks.orderRepository as unknown as OrderRepository,
-      mocks.sessionRepository as unknown as SessionRepository,
-      mocks.cartRepository as unknown as CartRepository,
-      mocks.cartItemRepository as unknown as CartItemRepository,
-      mocks.storeRepository as unknown as StoreRepository,
-      mocks.productRepository as unknown as ProductRepository,
-    );
-  });
-
+   orderService = new OrderService(
+  mockDatabase as unknown as Knex,
+  mocks.orderRepository as unknown as OrderRepository,
+  mocks.sessionRepository as unknown as SessionRepository,
+  mocks.cartRepository as unknown as CartRepository,
+  mocks.cartItemRepository as unknown as CartItemRepository,
+  mocks.storeRepository as unknown as StoreRepository,
+  mocks.productRepository as unknown as ProductRepository,
+  mocks.notificationService as unknown as NotificationService,
+);
+});
   // ---------------------------------------------------------------------------
   // GET BY ID
   // ---------------------------------------------------------------------------
@@ -950,6 +974,106 @@ describe("OrderService", () => {
         }),
       );
     });
+
+it("should notify the seller only when the cart buyer is anonymous", async () => {
+  prepareValidCart({
+    session: {
+      user_id: null,
+    },
+  });
+
+  const createdOrder = createOrder({
+    buyer_user_id: null,
+  });
+
+  orderCreateSpy.mockResolvedValue(createdOrder);
+
+  orderCreateItemsSpy.mockResolvedValue([
+    createOrderItem(),
+  ]);
+
+  await orderService.createFromCart(
+    SESSION_ID,
+    validOrderInput,
+  );
+
+  expect(mocks.notificationService.create).toHaveBeenCalledTimes(1);
+
+  expect(mocks.notificationService.create).toHaveBeenCalledWith(
+    expect.objectContaining({
+      user_id: USER_ID,
+      type: "new_order_for_seller",
+      title: "Nouvelle commande",
+      body: `Vous avez reçu une nouvelle commande ${createdOrder.reference}.`,
+      data: expect.objectContaining({
+        order_id: createdOrder.id,
+        order_reference: createdOrder.reference,
+        total_amount: 10000,
+        currency: "XOF",
+      }),
+    }),
+    mockTransaction,
+  );
+});
+
+it("should notify both seller and buyer when the cart buyer is authenticated", async () => {
+  prepareValidCart({
+    session: {
+      user_id: BUYER_USER_ID,
+    },
+  });
+
+  const createdOrder = createOrder({
+    buyer_user_id: BUYER_USER_ID,
+  });
+
+  orderCreateSpy.mockResolvedValue(createdOrder);
+
+  orderCreateItemsSpy.mockResolvedValue([
+    createOrderItem(),
+  ]);
+
+  await orderService.createFromCart(
+    SESSION_ID,
+    validOrderInput,
+  );
+
+  expect(mocks.notificationService.create).toHaveBeenCalledTimes(2);
+
+  expect(mocks.notificationService.create).toHaveBeenNthCalledWith(
+    1,
+    expect.objectContaining({
+      user_id: USER_ID,
+      type: "new_order_for_seller",
+      title: "Nouvelle commande",
+      body: `Vous avez reçu une nouvelle commande ${createdOrder.reference}.`,
+      data: expect.objectContaining({
+        order_id: createdOrder.id,
+        order_reference: createdOrder.reference,
+        total_amount: 10000,
+        currency: "XOF",
+      }),
+    }),
+    mockTransaction,
+  );
+
+  expect(mocks.notificationService.create).toHaveBeenNthCalledWith(
+    2,
+    expect.objectContaining({
+      user_id: BUYER_USER_ID,
+      type: "new_order_for_buyer",
+      title: "Commande créée",
+      body: `Votre commande ${createdOrder.reference} a été créée.`,
+      data: expect.objectContaining({
+        order_id: createdOrder.id,
+        order_reference: createdOrder.reference,
+        total_amount: 10000,
+        currency: "XOF",
+      }),
+    }),
+    mockTransaction,
+  );
+});
   });
 
   // ---------------------------------------------------------------------------
@@ -1288,6 +1412,114 @@ describe("OrderService", () => {
         }),
       );
     });
+
+it("should notify the seller only when the buyer is anonymous", async () => {
+  prepareValidDirectOrder({
+    session: {
+      user_id: null,
+    },
+  });
+
+  const createdOrderItem = createOrderItem();
+
+const createdOrder = createOrder({
+  buyer_user_id: null,
+});
+
+orderCreateSpy.mockResolvedValue(createdOrder);
+orderCreateItemSpy.mockResolvedValue(createdOrderItem);
+
+  orderCreateItemSpy.mockResolvedValue(
+    createOrderItem(),
+  );
+
+  const result = await orderService.createDirect(
+    SESSION_ID,
+    validDirectOrderInput,
+  );
+
+  expect(result).toEqual({
+  ...createdOrder,
+  items: [createdOrderItem],
+});
+
+  expect(mocks.notificationService.create).toHaveBeenCalledTimes(1);
+
+  expect(mocks.notificationService.create).toHaveBeenCalledWith(
+    expect.objectContaining({
+      user_id: USER_ID,
+      type: "new_order_for_seller",
+      title: "Nouvelle commande",
+      body: `Vous avez reçu une nouvelle commande ${createdOrder.reference}.`,
+      data: expect.objectContaining({
+        order_id: createdOrder.id,
+        order_reference: createdOrder.reference,
+        total_amount: 20000,
+        currency: "XOF",
+      }),
+    }),
+    mockTransaction,
+  );
+});
+
+it("should notify both seller and buyer when the buyer is authenticated", async () => {
+  prepareValidDirectOrder({
+    session: {
+      user_id: USER_ID,
+    },
+  });
+
+  const createdOrder = createOrder({
+    buyer_user_id: USER_ID,
+  });
+
+  orderCreateSpy.mockResolvedValue(createdOrder);
+
+  orderCreateItemSpy.mockResolvedValue(
+    createOrderItem(),
+  );
+
+  await orderService.createDirect(
+    SESSION_ID,
+    validDirectOrderInput,
+  );
+
+  expect(mocks.notificationService.create).toHaveBeenCalledTimes(2);
+
+  expect(mocks.notificationService.create).toHaveBeenNthCalledWith(
+    1,
+    expect.objectContaining({
+      user_id: USER_ID,
+      type: "new_order_for_seller",
+      title: "Nouvelle commande",
+      body: `Vous avez reçu une nouvelle commande ${createdOrder.reference}.`,
+      data: expect.objectContaining({
+        order_id: createdOrder.id,
+        order_reference: createdOrder.reference,
+        total_amount: 20000,
+        currency: "XOF",
+      }),
+    }),
+    mockTransaction,
+  );
+
+  expect(mocks.notificationService.create).toHaveBeenNthCalledWith(
+    2,
+    expect.objectContaining({
+      user_id: USER_ID,
+      type: "new_order_for_buyer",
+      title: "Commande créée",
+      body: `Votre commande ${createdOrder.reference} a été créée.`,
+      data: expect.objectContaining({
+        order_id: createdOrder.id,
+        order_reference: createdOrder.reference,
+        total_amount: 20000,
+        currency: "XOF",
+      }),
+    }),
+    mockTransaction,
+  );
+});
   });
 
   // ---------------------------------------------------------------------------

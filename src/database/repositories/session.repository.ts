@@ -5,9 +5,9 @@ import db from "../knex.js";
 export interface Session {
   id: string;
   user_id: string | null;
-  expires_at: Date;
   created_at: Date;
-  updated_at: Date;
+  last_seen_at: Date;
+  expires_at: Date;
 }
 
 export interface CreateSessionData {
@@ -23,7 +23,9 @@ export class SessionRepository {
   constructor(private readonly database: Knex = db) {}
 
   async findById(id: string): Promise<Session | undefined> {
-    return this.database<Session>("sessions").where({ id }).first();
+    return this.database<Session>("sessions")
+      .where({ id })
+      .first();
   }
 
   async findByUserId(userId: string): Promise<Session[]> {
@@ -56,6 +58,8 @@ export class SessionRepository {
   }
 
   async delete(id: string): Promise<number> {
-    return this.database<Session>("sessions").where({ id }).del();
+    return this.database<Session>("sessions")
+      .where({ id })
+      .del();
   }
 }

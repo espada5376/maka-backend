@@ -235,6 +235,64 @@ describe("SessionService", () => {
     });
   });
 
+describe("getValidById", () => {
+  it("should return the session when it exists and is not expired", async () => {
+    const session = {
+      id: "session-1",
+      user_id: "user-1",
+      expires_at: new Date(Date.now() + 60_000),
+      created_at: new Date(),
+      last_seen_at: new Date(),
+    };
+
+    sessionRepository.findById.mockResolvedValue(session);
+
+    await expect(
+      sessionService.getValidById("session-1"),
+    ).resolves.toEqual(session);
+
+    expect(sessionRepository.findById).toHaveBeenCalledWith("session-1");
+  });
+
+  it("should return undefined when the session does not exist", async () => {
+    sessionRepository.findById.mockResolvedValue(undefined);
+
+    await expect(
+      sessionService.getValidById("unknown"),
+    ).resolves.toBeUndefined();
+
+    expect(sessionRepository.findById).toHaveBeenCalledWith("unknown");
+  });
+
+  it("should return undefined when the session is expired", async () => {
+    const session = {
+      id: "session-1",
+      user_id: "user-1",
+      expires_at: new Date(Date.now() - 1_000),
+      created_at: new Date(),
+      last_seen_at: new Date(),
+    };
+
+    sessionRepository.findById.mockResolvedValue(session);
+
+    await expect(
+      sessionService.getValidById("session-1"),
+    ).resolves.toBeUndefined();
+
+    expect(sessionRepository.findById).toHaveBeenCalledWith("session-1");
+  });
+
+  it("should propagate repository errors", async () => {
+    const error = new Error("database error");
+
+    sessionRepository.findById.mockRejectedValue(error);
+
+    await expect(
+      sessionService.getValidById("session-1"),
+    ).rejects.toThrow(error);
+  });
+});
+
   describe("updateExpiration", () => {
     it("should update the session expiration", async () => {
       const expiresAt = new Date("2030-01-01T00:00:00Z");

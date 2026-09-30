@@ -1,4 +1,6 @@
+
 import { Knex } from "knex";
+
 import db from "../knex.js";
 
 export type ProductAvailability = "available" | "unavailable";
@@ -77,7 +79,7 @@ export class ProductRepository {
         category_id: data.category_id,
         name: data.name,
         description: data.description ?? null,
-        price: data.price,
+        price: data.price.toFixed(2),
         availability: data.availability ?? "available",
         status: data.status ?? "active",
       })
@@ -90,12 +92,32 @@ export class ProductRepository {
     id: string,
     data: UpdateProductData,
   ): Promise<Product | undefined> {
+    const updateData: Partial<{
+      store_id: string;
+      category_id: string;
+      name: string;
+      description: string | null;
+      price: string;
+      availability: ProductAvailability;
+      status: ProductStatus;
+      updated_at: Knex.Raw;
+    }> = {
+      store_id: data.store_id,
+      category_id: data.category_id,
+      name: data.name,
+      description: data.description,
+      availability: data.availability,
+      status: data.status,
+      updated_at: this.database.fn.now(),
+    };
+
+    if (data.price !== undefined) {
+      updateData.price = data.price.toFixed(2);
+    }
+
     const [product] = await this.database<Product>("products")
       .where({ id })
-      .update({
-        ...data,
-        updated_at: this.database.fn.now(),
-      })
+      .update(updateData)
       .returning("*");
 
     return product;
@@ -131,3 +153,4 @@ export class ProductRepository {
     return product;
   }
 }
+

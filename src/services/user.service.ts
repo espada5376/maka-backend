@@ -1,27 +1,12 @@
-
 import {
   UserRepository,
   type User,
   type CreateUserData,
 } from "../database/repositories/user.repository.js";
 
-export enum UserErrorCode {
-  USER_NOT_FOUND = "USER_NOT_FOUND",
-  INVALID_NAME = "INVALID_NAME",
-  INVALID_PHONE = "INVALID_PHONE",
-  PHONE_ALREADY_EXISTS = "PHONE_ALREADY_EXISTS",
-  INVALID_STATUS = "INVALID_STATUS",
-}
+import { createAppError } from "../common/errors/create-app-error.js";
+import { Errors } from "../common/errors/errors.js";
 
-export class UserServiceError extends Error {
-  constructor(
-    public readonly code: UserErrorCode,
-    message: string,
-  ) {
-    super(message);
-    this.name = "UserServiceError";
-  }
-}
 
 export class UserService {
   constructor(
@@ -32,10 +17,7 @@ export class UserService {
     const user = await this.userRepository.findById(id);
 
     if (!user) {
-      throw new UserServiceError(
-        UserErrorCode.USER_NOT_FOUND,
-        `User not found: ${id}`,
-      );
+      throw createAppError(Errors.USER_NOT_FOUND);
     }
 
     return user;
@@ -47,10 +29,7 @@ export class UserService {
     const user = await this.userRepository.findByPhone(normalizedPhone);
 
     if (!user) {
-      throw new UserServiceError(
-        UserErrorCode.USER_NOT_FOUND,
-        `User not found with phone: ${normalizedPhone}`,
-      );
+     throw createAppError(Errors.USER_NOT_FOUND);
     }
 
     return user;
@@ -63,10 +42,7 @@ export class UserService {
     const existingUser = await this.userRepository.findByPhone(phone);
 
     if (existingUser) {
-      throw new UserServiceError(
-        UserErrorCode.PHONE_ALREADY_EXISTS,
-        `A user already exists with phone: ${phone}`,
-      );
+     throw createAppError(Errors.PHONE_ALREADY_EXISTS);
     }
 
     return this.userRepository.create({
@@ -87,17 +63,14 @@ export class UserService {
       updateData.name = this.normalizeName(data.name);
     }
 
-    if ("status" in data) {
+    if (data.status !== undefined) {
       updateData.status = this.validateStatus(data.status);
     }
 
     const updatedUser = await this.userRepository.update(id, updateData);
 
     if (!updatedUser) {
-      throw new UserServiceError(
-        UserErrorCode.USER_NOT_FOUND,
-        `User not found: ${id}`,
-      );
+      throw createAppError(Errors.USER_NOT_FOUND);
     }
 
     return updatedUser;
@@ -109,10 +82,7 @@ export class UserService {
     const user = await this.userRepository.markPhoneAsVerified(id);
 
     if (!user) {
-      throw new UserServiceError(
-        UserErrorCode.USER_NOT_FOUND,
-        `User not found: ${id}`,
-      );
+      throw createAppError(Errors.USER_NOT_FOUND);
     }
 
     return user;
@@ -120,19 +90,13 @@ export class UserService {
 
   private normalizePhone(phone: string): string {
     if (typeof phone !== "string") {
-      throw new UserServiceError(
-        UserErrorCode.INVALID_PHONE,
-        "Phone must be a string",
-      );
+      throw createAppError(Errors.INVALID_PHONE);        
     }
 
     const normalizedPhone = phone.trim();
 
     if (!normalizedPhone || normalizedPhone.length > 20) {
-      throw new UserServiceError(
-        UserErrorCode.INVALID_PHONE,
-        "Phone must contain between 1 and 20 characters",
-      );
+      throw createAppError(Errors.INVALID_PHONE);
     }
 
     return normalizedPhone;
@@ -144,19 +108,13 @@ export class UserService {
     }
 
     if (typeof name !== "string") {
-      throw new UserServiceError(
-        UserErrorCode.INVALID_NAME,
-        "Name must be a string or null",
-      );
+      throw createAppError(Errors.INVALID_NAME);
     }
 
     const normalizedName = name.trim();
 
     if (!normalizedName || normalizedName.length > 100) {
-      throw new UserServiceError(
-        UserErrorCode.INVALID_NAME,
-        "Name must contain between 1 and 100 characters",
-      );
+      throw createAppError(Errors.INVALID_NAME);
     }
 
     return normalizedName;
@@ -164,13 +122,9 @@ export class UserService {
 
   private validateStatus(status: User["status"]): User["status"] {
     if (status !== "active" && status !== "inactive") {
-      throw new UserServiceError(
-        UserErrorCode.INVALID_STATUS,
-        "Status must be either active or inactive",
-      );
+      throw createAppError(Errors.INVALID_USER_STATUS);        
     }
 
     return status;
   }
 }
-

@@ -39,6 +39,20 @@ export class SessionService {
     return session;
   }
 
+async getValidById(id: string): Promise<Session | undefined> {
+  const session = await this.sessionRepository.findById(id);
+
+  if (!session) {
+    return undefined;
+  }
+
+  if (session.expires_at.getTime() <= Date.now()) {
+    return undefined;
+  }
+
+  return session;
+}
+
   async getByUserId(userId: string): Promise<Session[]> {
     return this.sessionRepository.findByUserId(userId);
   }

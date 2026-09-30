@@ -1,16 +1,33 @@
+import type { Knex } from "knex";
+
+import db from "../database/knex.js";
+
 import {
   NotificationRepository,
   type Notification,
   type CreateNotificationData,
 } from "../database/repositories/notification.repository.js";
 
+import {
+  NotificationDeliveryRepository,
+} from "../database/repositories/notification-delivery.repository.js";
+
+import {
+  getNotificationChannels,
+} from "../notifications/types/notification-channel.js";
+
 import { Errors } from "../common/errors/errors.js";
 import { createAppError } from "../common/errors/create-app-error.js";
 
+
 export class NotificationService {
   constructor(
-    private readonly notificationRepository: NotificationRepository = new NotificationRepository(),
-  ) {}
+  private readonly notificationRepository: NotificationRepository =
+    new NotificationRepository(),
+  private readonly notificationDeliveryRepository: NotificationDeliveryRepository =
+    new NotificationDeliveryRepository(),
+  private readonly database: Knex = db,
+) {}
 
   async getById(id: string): Promise<Notification> {
     const notification = await this.notificationRepository.findById(id);
@@ -40,21 +57,50 @@ export class NotificationService {
     return this.notificationRepository.countUnreadByUserId(normalizedUserId);
   }
 
-  async create(data: CreateNotificationData): Promise<Notification> {
-    const userId = this.normalizeUserId(data.user_id);
-    const type = this.normalizeType(data.type);
-    const title = this.normalizeTitle(data.title);
-    const body = this.normalizeBody(data.body);
-    const notificationData = this.validateData(data.data);
+ async create(
+  data: CreateNotificationData,
+  database: Knex = this.database,
+): Promise<Notification> {
+  const userId = this.normalizeUserId(data.user_id);
+  const type = this.normalizeType(data.type);
+  const title = this.normalizeTitle(data.title);
+  const body = this.normalizeBody(data.body);
+  const notificationData = this.validateData(data.data);
 
-    return this.notificationRepository.create({
-      user_id: userId,
-      type,
-      title,
-      body,
-      data: notificationData,
-    });
+  const channels = getNotificationChannels(type);
+
+  const createNotification = async (transaction: Knex) => {
+    const notification =
+      await this.notificationRepository.create(
+        {
+          user_id: userId,
+          type,
+          title,
+          body,
+          data: notificationData,
+        },
+        transaction,
+      );
+
+    if (channels.includes("whatsapp")) {
+      await this.notificationDeliveryRepository.create(
+        {
+          notification_id: notification.id,
+          channel: "whatsapp",
+        },
+        transaction,
+      );
+    }
+
+    return notification;
+  };
+
+  if (database === this.database) {
+    return this.database.transaction(createNotification);
   }
+
+  return createNotification(database);
+}
 
   async markAsRead(id: string): Promise<Notification> {
     const notification = await this.notificationRepository.markAsRead(id);

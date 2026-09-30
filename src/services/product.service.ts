@@ -123,12 +123,9 @@ export class ProductService implements IProductService {
   }
 
   private async getOwnedProduct(
-    productId: string,
-    userId: string,
-  ): Promise<{
-    product: Product;
-    store: Awaited<ReturnType<StoreRepository["findById"]>>;
-  }> {
+  productId: string,
+  userId: string,
+  ) {
     const product = await this.productRepository.findById(productId);
 
     if (!product) {

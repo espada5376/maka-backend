@@ -1,10 +1,17 @@
+import db from "../database/knex.js";
+import { NotificationDeliveryRepository, } from "../database/repositories/notification-delivery.repository.js";
+import { getNotificationChannels, } from "../notifications/types/notification-channel.js";
 import { NotificationRepository, } from "../database/repositories/notification.repository.js";
 import { Errors } from "../common/errors/errors.js";
 import { createAppError } from "../common/errors/create-app-error.js";
 export class NotificationService {
     notificationRepository;
-    constructor(notificationRepository = new NotificationRepository()) {
+    notificationDeliveryRepository;
+    database;
+    constructor(notificationRepository = new NotificationRepository(), notificationDeliveryRepository = new NotificationDeliveryRepository(), database = db) {
         this.notificationRepository = notificationRepository;
+        this.notificationDeliveryRepository = notificationDeliveryRepository;
+        this.database = database;
     }
     async getById(id) {
         const notification = await this.notificationRepository.findById(id);
@@ -31,12 +38,22 @@ export class NotificationService {
         const title = this.normalizeTitle(data.title);
         const body = this.normalizeBody(data.body);
         const notificationData = this.validateData(data.data);
-        return this.notificationRepository.create({
-            user_id: userId,
-            type,
-            title,
-            body,
-            data: notificationData,
+        return this.database.transaction(async (transaction) => {
+            const notification = await this.notificationRepository.create({
+                user_id: userId,
+                type,
+                title,
+                body,
+                data: notificationData,
+            }, transaction);
+            const channels = getNotificationChannels(type);
+            if (channels.includes("whatsapp")) {
+                await this.notificationDeliveryRepository.create({
+                    notification_id: notification.id,
+                    channel: "whatsapp",
+                }, transaction);
+            }
+            return notification;
         });
     }
     async markAsRead(id) {

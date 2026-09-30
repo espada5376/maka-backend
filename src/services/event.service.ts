@@ -78,7 +78,7 @@ export class EventServiceImpl implements EventService {
       product_id: payload.productId ?? null,
       order_id: payload.orderId ?? null,
 
-      metadata: payload.metadata ?? {},
+      metadata: (payload.metadata ?? {}) as Record<string, unknown>,
       occurred_at: payload.occurredAt,
     });
   }

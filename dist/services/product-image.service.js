@@ -42,10 +42,10 @@ export class ProductImageService {
     }
     async update(id, data) {
         const updateData = {};
-        if ("url" in data) {
+        if (data.url !== undefined) {
             updateData.url = this.normalizeUrl(data.url);
         }
-        if ("position" in data) {
+        if (data.position !== undefined) {
             updateData.position = this.validatePosition(data.position);
         }
         await this.getById(id);

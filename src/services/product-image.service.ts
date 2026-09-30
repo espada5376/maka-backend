@@ -64,13 +64,13 @@ export class ProductImageService {
   ): Promise<ProductImage> {
     const updateData: UpdateProductImageData = {};
 
-    if ("url" in data) {
-      updateData.url = this.normalizeUrl(data.url);
-    }
+    if (data.url !== undefined) {
+  updateData.url = this.normalizeUrl(data.url);
+}
 
-    if ("position" in data) {
-      updateData.position = this.validatePosition(data.position);
-    }
+if (data.position !== undefined) {
+  updateData.position = this.validatePosition(data.position);
+}
 
     await this.getById(id);
 
