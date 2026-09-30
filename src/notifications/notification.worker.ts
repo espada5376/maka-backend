@@ -1,21 +1,15 @@
-import {
-  NotificationDeliveryRepository,
-} from "../database/repositories/notification-delivery.repository.js";
-import {
-  NotificationRepository,
-} from "../database/repositories/notification.repository.js";
-import {
-  UserRepository,
-} from "../database/repositories/user.repository.js";
-import {
-  WhatsAppProviderError,
-} from "./providers/whatsapp.provider.js";
+import { NotificationDeliveryRepository } from "../database/repositories/notification-delivery.repository.js";
+
+import { mapNotificationToWhatsAppTemplate } from "./whatsapp-notification.mapper.js";
+
+import { NotificationRepository } from "../database/repositories/notification.repository.js";
+import { UserRepository } from "../database/repositories/user.repository.js";
+import { WhatsAppProviderError } from "./providers/whatsapp.provider.js";
 
 import type {
   WhatsAppMessage,
   WhatsAppProvider,
 } from "./providers/whatsapp.provider.js";
-
 
 const RETRY_DELAY_SECONDS = 60;
 
@@ -28,8 +22,7 @@ export class NotificationWorker {
   ) {}
 
   async processNext(): Promise<boolean> {
-    const delivery =
-      await this.deliveryRepository.claimPending();
+    const delivery = await this.deliveryRepository.claimPending();
 
     if (!delivery) {
       return false;
@@ -42,118 +35,86 @@ export class NotificationWorker {
 
   private async processDelivery(
     delivery: NonNullable<
-      Awaited<
-        ReturnType<
-          NotificationDeliveryRepository["claimPending"]
-        >
-      >
+      Awaited<ReturnType<NotificationDeliveryRepository["claimPending"]>>
     >,
   ): Promise<void> {
     try {
-      const notification =
-        await this.notificationRepository.findById(
-          delivery.notification_id,
-        );
+      const notification = await this.notificationRepository.findById(
+        delivery.notification_id,
+      );
 
       if (!notification) {
-        await this.deliveryRepository.markFailed(
-          delivery.id,
-          {
-            error_code: "NOTIFICATION_NOT_FOUND",
-            error_message:
-              "Notification associated with delivery was not found.",
-          },
-        );
+        await this.deliveryRepository.markFailed(delivery.id, {
+          error_code: "NOTIFICATION_NOT_FOUND",
+          error_message: "Notification associated with delivery was not found.",
+        });
 
         return;
       }
 
-      const user =
-        await this.userRepository.findById(
-          notification.user_id,
-        );
+      const user = await this.userRepository.findById(notification.user_id);
 
       if (!user) {
-        await this.deliveryRepository.markFailed(
-          delivery.id,
-          {
-            error_code: "USER_NOT_FOUND",
-            error_message:
-              "User associated with notification was not found.",
-          },
-        );
+        await this.deliveryRepository.markFailed(delivery.id, {
+          error_code: "USER_NOT_FOUND",
+          error_message: "User associated with notification was not found.",
+        });
 
         return;
       }
 
       const message: WhatsAppMessage = {
         to: user.phone,
-        body: notification.body,
+        template: mapNotificationToWhatsAppTemplate(notification),
       };
 
-      const result =
-        await this.whatsappProvider.send(message);
+      const result = await this.whatsappProvider.send(message);
 
-      await this.deliveryRepository.markSent(
-        delivery.id,
-        {
-          provider_message_id:
-            result.providerMessageId,
-        },
-      );
+      await this.deliveryRepository.markSent(delivery.id, {
+        provider_message_id: result.providerMessageId,
+      });
     } catch (error) {
-      await this.handleSendFailure(
-        delivery.id,
-        error,
-      );
+      await this.handleSendFailure(delivery.id, error);
     }
   }
 
   private async handleSendFailure(
-  deliveryId: string,
-  error: unknown,
-): Promise<void> {
-  const errorMessage =
-    error instanceof Error
-      ? error.message
-      : "Unknown WhatsApp delivery error";
+    deliveryId: string,
+    error: unknown,
+  ): Promise<void> {
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : "Unknown WhatsApp delivery error";
 
-  if (error instanceof WhatsAppProviderError) {
-    if (error.type === "permanent") {
-      await this.deliveryRepository.markFailed(
-        deliveryId,
-        {
-          error_code:
-            error.code ?? "WHATSAPP_PERMANENT_ERROR",
+    if (error instanceof WhatsAppProviderError) {
+      if (error.type === "permanent") {
+        await this.deliveryRepository.markFailed(deliveryId, {
+          error_code: error.code ?? "WHATSAPP_PERMANENT_ERROR",
           error_message: errorMessage,
-        },
-      );
+        });
 
-      return;
+        return;
+      }
     }
-  }
 
-  const retry =
-    await this.deliveryRepository.scheduleRetry(
+    const retry = await this.deliveryRepository.scheduleRetry(
       deliveryId,
       RETRY_DELAY_SECONDS,
       {
         error_code:
           error instanceof WhatsAppProviderError
-            ? error.code ?? "WHATSAPP_TEMPORARY_ERROR"
+            ? (error.code ?? "WHATSAPP_TEMPORARY_ERROR")
             : "WHATSAPP_SEND_ERROR",
         error_message: errorMessage,
       },
     );
 
-  if (!retry) {
-    await this.deliveryRepository.markFailed(
-      deliveryId,
-      {
+    if (!retry) {
+      await this.deliveryRepository.markFailed(deliveryId, {
         error_code: "MAX_ATTEMPTS_EXCEEDED",
         error_message: errorMessage,
-      },
-    );
+      });
+    }
   }
-}
 }

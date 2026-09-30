@@ -1,15 +1,29 @@
+export interface WhatsAppNewOrderSellerTemplate {
+  name: "new_order_seller";
+  language: "fr";
+  variables: string[];
+}
+
+export interface WhatsAppVerificationCodeTemplate {
+  name: "verification_code";
+  language: "fr";
+  otp: string;
+}
+
+export type WhatsAppTemplate =
+  | WhatsAppNewOrderSellerTemplate
+  | WhatsAppVerificationCodeTemplate;
+
 export interface WhatsAppMessage {
   to: string;
-  body: string;
+  template: WhatsAppTemplate;
 }
 
 export interface WhatsAppSendResult {
   providerMessageId: string;
 }
 
-export type WhatsAppProviderErrorType =
-  | "temporary"
-  | "permanent";
+export type WhatsAppProviderErrorType = "temporary" | "permanent";
 
 export class WhatsAppProviderError extends Error {
   constructor(
@@ -23,7 +37,5 @@ export class WhatsAppProviderError extends Error {
 }
 
 export interface WhatsAppProvider {
-  send(
-    message: WhatsAppMessage,
-  ): Promise<WhatsAppSendResult>;
+  send(message: WhatsAppMessage): Promise<WhatsAppSendResult>;
 }

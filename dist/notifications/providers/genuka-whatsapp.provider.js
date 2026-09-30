@@ -1,60 +1,42 @@
-import { WhatsAppProviderError, } from "./whatsapp.provider.js";
 export class GenukaWhatsAppProvider {
-    apiKey;
-    connectionId;
-    baseUrl;
+    config;
     constructor(config) {
-        this.apiKey = config.apiKey;
-        this.connectionId = config.connectionId;
-        this.baseUrl =
-            config.baseUrl ?? "https://wa.genuka.com/api/v1";
-        if (!this.apiKey.trim()) {
-            throw new Error("Genuka WhatsApp API key is required.");
-        }
-        if (!this.connectionId.trim()) {
-            throw new Error("Genuka WhatsApp connection ID is required.");
-        }
+        this.config = config;
     }
     async send(message) {
         let response;
         try {
-            response = await fetch(`${this.baseUrl}/messages`, {
+            response = await fetch(`${this.config.baseUrl}/messages`, {
                 method: "POST",
                 headers: {
-                    Authorization: `Bearer ${this.apiKey}`,
+                    Authorization: `Bearer ${this.config.apiKey}`,
                     "Content-Type": "application/json",
-                    "User-Agent": "maka-backend/1.0",
                 },
                 body: JSON.stringify({
-                    connectionId: this.connectionId,
+                    connectionId: this.config.connectionId,
                     to: message.to,
-                    text: message.body,
+                    template: message.template,
                 }),
             });
         }
         catch (error) {
-            const errorMessage = error instanceof Error
+            throw new WhatsAppProviderError(error instanceof Error
                 ? error.message
-                : "Unknown Genuka network error";
-            throw new WhatsAppProviderError(errorMessage, "temporary", "GENUKA_NETWORK_ERROR");
+                : "Network error while sending WhatsApp message.", "temporary", "NETWORK_ERROR");
         }
         const responseBody = await this.parseResponse(response);
         if (!response.ok) {
             throw this.createProviderError(response.status, responseBody);
         }
-        const providerMessageId = responseBody.data?.messageId;
+        const providerMessageId = this.extractProviderMessageId(responseBody);
         if (!providerMessageId) {
-            throw new WhatsAppProviderError("Genuka response does not contain a message ID.", "temporary", "GENUKA_INVALID_RESPONSE");
+            throw new WhatsAppProviderError("Genuka response does not contain a message ID.", "temporary", "MISSING_MESSAGE_ID");
         }
         return {
             providerMessageId,
         };
     }
     async parseResponse(response) {
-        const contentType = response.headers.get("content-type") ?? "";
-        if (!contentType.includes("application/json")) {
-            return {};
-        }
         try {
             return (await response.json());
         }
@@ -62,22 +44,31 @@ export class GenukaWhatsAppProvider {
             return {};
         }
     }
-    createProviderError(status, body) {
-        const message = body.message ??
-            body.error ??
-            `Genuka API request failed with status ${status}.`;
-        if (status === 400 || status === 404) {
-            return new WhatsAppProviderError(message, "permanent", body.error ?? `HTTP_${status}`);
+    extractProviderMessageId(responseBody) {
+        const messageId = responseBody.data?.messageId;
+        if (typeof messageId !== "string" || !messageId.trim()) {
+            return undefined;
         }
-        if (status === 401 || status === 403) {
-            return new WhatsAppProviderError(message, "permanent", body.error ?? `HTTP_${status}`);
+        return messageId;
+    }
+    createProviderError(status, responseBody) {
+        const message = `Genuka WhatsApp request failed with status ${status}.`;
+        if (status === 400 || status === 401 || status === 403 || status === 404) {
+            return new WhatsAppProviderError(message, "permanent", `HTTP_${status}`);
         }
-        if (status === 429) {
-            return new WhatsAppProviderError(message, "temporary", body.error ?? "RATE_LIMITED");
+        if (status === 429 || status >= 500) {
+            return new WhatsAppProviderError(message, "temporary", `HTTP_${status}`);
         }
-        if (status >= 500) {
-            return new WhatsAppProviderError(message, "temporary", body.error ?? `HTTP_${status}`);
-        }
-        return new WhatsAppProviderError(message, "temporary", body.error ?? `HTTP_${status}`);
+        return new WhatsAppProviderError(message, "permanent", `HTTP_${status}`);
+    }
+}
+export class WhatsAppProviderError extends Error {
+    type;
+    code;
+    constructor(message, type, code) {
+        super(message);
+        this.type = type;
+        this.code = code;
+        this.name = "WhatsAppProviderError";
     }
 }

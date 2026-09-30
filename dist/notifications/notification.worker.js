@@ -1,4 +1,5 @@
-import { WhatsAppProviderError, } from "./providers/whatsapp.provider.js";
+import { mapNotificationToWhatsAppTemplate } from "./whatsapp-notification.mapper.js";
+import { WhatsAppProviderError } from "./providers/whatsapp.provider.js";
 const RETRY_DELAY_SECONDS = 60;
 export class NotificationWorker {
     deliveryRepository;
@@ -39,7 +40,7 @@ export class NotificationWorker {
             }
             const message = {
                 to: user.phone,
-                body: notification.body,
+                template: mapNotificationToWhatsAppTemplate(notification),
             };
             const result = await this.whatsappProvider.send(message);
             await this.deliveryRepository.markSent(delivery.id, {
@@ -65,7 +66,7 @@ export class NotificationWorker {
         }
         const retry = await this.deliveryRepository.scheduleRetry(deliveryId, RETRY_DELAY_SECONDS, {
             error_code: error instanceof WhatsAppProviderError
-                ? error.code ?? "WHATSAPP_TEMPORARY_ERROR"
+                ? (error.code ?? "WHATSAPP_TEMPORARY_ERROR")
                 : "WHATSAPP_SEND_ERROR",
             error_message: errorMessage,
         });

@@ -1,4 +1,3 @@
-
 import {
   SessionRepository,
   type Session,
@@ -22,8 +21,7 @@ export class SessionServiceError extends Error {
 
 export class SessionService {
   constructor(
-    private readonly sessionRepository: SessionRepository =
-      new SessionRepository(),
+    private readonly sessionRepository: SessionRepository = new SessionRepository(),
   ) {}
 
   async getById(id: string): Promise<Session> {
@@ -39,19 +37,19 @@ export class SessionService {
     return session;
   }
 
-async getValidById(id: string): Promise<Session | undefined> {
-  const session = await this.sessionRepository.findById(id);
+  async getValidById(id: string): Promise<Session | undefined> {
+    const session = await this.sessionRepository.findById(id);
 
-  if (!session) {
-    return undefined;
+    if (!session) {
+      return undefined;
+    }
+
+    if (session.expires_at.getTime() <= Date.now()) {
+      return undefined;
+    }
+
+    return session;
   }
-
-  if (session.expires_at.getTime() <= Date.now()) {
-    return undefined;
-  }
-
-  return session;
-}
 
   async getByUserId(userId: string): Promise<Session[]> {
     return this.sessionRepository.findByUserId(userId);
@@ -76,10 +74,7 @@ async getValidById(id: string): Promise<Session | undefined> {
     return session.expires_at.getTime() > Date.now();
   }
 
-  async updateExpiration(
-    id: string,
-    expiresAt: Date,
-  ): Promise<Session> {
+  async updateExpiration(id: string, expiresAt: Date): Promise<Session> {
     this.validateExpiration(expiresAt);
 
     await this.getById(id);
@@ -124,4 +119,3 @@ async getValidById(id: string): Promise<Session | undefined> {
     }
   }
 }
-

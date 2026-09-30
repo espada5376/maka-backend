@@ -7,7 +7,6 @@ import {
 import { createAppError } from "../common/errors/create-app-error.js";
 import { Errors } from "../common/errors/errors.js";
 
-
 export class UserService {
   constructor(
     private readonly userRepository: UserRepository = new UserRepository(),
@@ -29,7 +28,7 @@ export class UserService {
     const user = await this.userRepository.findByPhone(normalizedPhone);
 
     if (!user) {
-     throw createAppError(Errors.USER_NOT_FOUND);
+      throw createAppError(Errors.USER_NOT_FOUND);
     }
 
     return user;
@@ -42,7 +41,7 @@ export class UserService {
     const existingUser = await this.userRepository.findByPhone(phone);
 
     if (existingUser) {
-     throw createAppError(Errors.PHONE_ALREADY_EXISTS);
+      throw createAppError(Errors.PHONE_ALREADY_EXISTS);
     }
 
     return this.userRepository.create({
@@ -90,7 +89,7 @@ export class UserService {
 
   private normalizePhone(phone: string): string {
     if (typeof phone !== "string") {
-      throw createAppError(Errors.INVALID_PHONE);        
+      throw createAppError(Errors.INVALID_PHONE);
     }
 
     const normalizedPhone = phone.trim();
@@ -122,7 +121,7 @@ export class UserService {
 
   private validateStatus(status: User["status"]): User["status"] {
     if (status !== "active" && status !== "inactive") {
-      throw createAppError(Errors.INVALID_USER_STATUS);        
+      throw createAppError(Errors.INVALID_USER_STATUS);
     }
 
     return status;

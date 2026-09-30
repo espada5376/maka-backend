@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  GenukaWhatsAppProvider,
-} from "../../../src/notifications/providers/genuka-whatsapp.provider.js";
-import {
-  WhatsAppProviderError,
-} from "../../../src/notifications/providers/whatsapp.provider.js";
+
+import { GenukaWhatsAppProvider } from "../../../src/notifications/providers/genuka-whatsapp.provider.js";
 
 describe("GenukaWhatsAppProvider", () => {
   const config = {
@@ -13,35 +9,44 @@ describe("GenukaWhatsAppProvider", () => {
     baseUrl: "https://wa.genuka.test/api/v1",
   };
 
+  const newOrderTemplate = {
+    name: "new_order_seller" as const,
+    language: "fr" as const,
+    variables: ["CMD-1042", "15000", "FCFA"],
+  };
+
+  const verificationCodeTemplate = {
+    name: "verification_code" as const,
+    language: "fr" as const,
+    otp: "123456",
+  };
+
   beforeEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("should send a text message successfully", async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            data: {
-              messageId: "wamid.123456",
-            },
-          }),
-          {
-            status: 200,
-            headers: {
-              "Content-Type": "application/json",
-            },
+  it("should send a new-order template successfully", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            messageId: "wamid.123456",
           },
-        ),
-      );
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
 
-    const provider =
-      new GenukaWhatsAppProvider(config);
+    const provider = new GenukaWhatsAppProvider(config);
 
     const result = await provider.send({
       to: "+22890000000",
-      body: "Votre commande a été créée.",
+      template: newOrderTemplate,
     });
 
     expect(result).toEqual({
@@ -50,12 +55,9 @@ describe("GenukaWhatsAppProvider", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    const [url, options] =
-      fetchMock.mock.calls[0];
+    const [url, options] = fetchMock.mock.calls[0];
 
-    expect(url).toBe(
-      "https://wa.genuka.test/api/v1/messages",
-    );
+    expect(url).toBe("https://wa.genuka.test/api/v1/messages");
 
     expect(options).toMatchObject({
       method: "POST",
@@ -69,7 +71,56 @@ describe("GenukaWhatsAppProvider", () => {
     expect(JSON.parse(options?.body as string)).toEqual({
       connectionId: "test-connection-id",
       to: "+22890000000",
-      text: "Votre commande a été créée.",
+      template: {
+        name: "new_order_seller",
+        language: "fr",
+        variables: ["CMD-1042", "15000", "FCFA"],
+      },
+    });
+  });
+
+  it("should send a verification-code template successfully", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            messageId: "wamid.otp123456",
+          },
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    const provider = new GenukaWhatsAppProvider(config);
+
+    const result = await provider.send({
+      to: "+22890000000",
+      template: verificationCodeTemplate,
+    });
+
+    expect(result).toEqual({
+      providerMessageId: "wamid.otp123456",
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const [url, options] = fetchMock.mock.calls[0];
+
+    expect(url).toBe("https://wa.genuka.test/api/v1/messages");
+
+    expect(JSON.parse(options?.body as string)).toEqual({
+      connectionId: "test-connection-id",
+      to: "+22890000000",
+      template: {
+        name: "verification_code",
+        language: "fr",
+        otp: "123456",
+      },
     });
   });
 
@@ -80,9 +131,7 @@ describe("GenukaWhatsAppProvider", () => {
           ...config,
           apiKey: "",
         }),
-    ).toThrow(
-      "Genuka WhatsApp API key is required.",
-    );
+    ).toThrow("Genuka WhatsApp API key is required.");
   });
 
   it("should reject an empty connection ID", () => {
@@ -92,9 +141,7 @@ describe("GenukaWhatsAppProvider", () => {
           ...config,
           connectionId: "",
         }),
-    ).toThrow(
-      "Genuka WhatsApp connection ID is required.",
-    );
+    ).toThrow("Genuka WhatsApp connection ID is required.");
   });
 
   it("should classify a 400 error as permanent", async () => {
@@ -113,13 +160,12 @@ describe("GenukaWhatsAppProvider", () => {
       ),
     );
 
-    const provider =
-      new GenukaWhatsAppProvider(config);
+    const provider = new GenukaWhatsAppProvider(config);
 
     await expect(
       provider.send({
         to: "+22890000000",
-        body: "Test",
+        template: newOrderTemplate,
       }),
     ).rejects.toMatchObject({
       type: "permanent",
@@ -144,13 +190,12 @@ describe("GenukaWhatsAppProvider", () => {
       ),
     );
 
-    const provider =
-      new GenukaWhatsAppProvider(config);
+    const provider = new GenukaWhatsAppProvider(config);
 
     await expect(
       provider.send({
         to: "+22890000000",
-        body: "Test",
+        template: newOrderTemplate,
       }),
     ).rejects.toMatchObject({
       type: "permanent",
@@ -175,13 +220,12 @@ describe("GenukaWhatsAppProvider", () => {
       ),
     );
 
-    const provider =
-      new GenukaWhatsAppProvider(config);
+    const provider = new GenukaWhatsAppProvider(config);
 
     await expect(
       provider.send({
         to: "+22890000000",
-        body: "Test",
+        template: newOrderTemplate,
       }),
     ).rejects.toMatchObject({
       type: "temporary",
@@ -206,13 +250,12 @@ describe("GenukaWhatsAppProvider", () => {
       ),
     );
 
-    const provider =
-      new GenukaWhatsAppProvider(config);
+    const provider = new GenukaWhatsAppProvider(config);
 
     await expect(
       provider.send({
         to: "+22890000000",
-        body: "Test",
+        template: newOrderTemplate,
       }),
     ).rejects.toMatchObject({
       type: "temporary",
@@ -222,24 +265,23 @@ describe("GenukaWhatsAppProvider", () => {
   });
 
   it("should classify a network error as temporary", async () => {
-  vi.spyOn(globalThis, "fetch").mockRejectedValue(
-    new Error("Network connection failed"),
-  );
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(
+      new Error("Network connection failed"),
+    );
 
-  const provider =
-    new GenukaWhatsAppProvider(config);
+    const provider = new GenukaWhatsAppProvider(config);
 
-  await expect(
-    provider.send({
-      to: "+22890000000",
-      body: "Test",
-    }),
-  ).rejects.toMatchObject({
-    type: "temporary",
-    code: "GENUKA_NETWORK_ERROR",
-    message: "Network connection failed",
+    await expect(
+      provider.send({
+        to: "+22890000000",
+        template: newOrderTemplate,
+      }),
+    ).rejects.toMatchObject({
+      type: "temporary",
+      code: "GENUKA_NETWORK_ERROR",
+      message: "Network connection failed",
+    });
   });
-});
 
   it("should reject a successful response without a message ID", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -256,19 +298,17 @@ describe("GenukaWhatsAppProvider", () => {
       ),
     );
 
-    const provider =
-      new GenukaWhatsAppProvider(config);
+    const provider = new GenukaWhatsAppProvider(config);
 
     await expect(
       provider.send({
         to: "+22890000000",
-        body: "Test",
+        template: newOrderTemplate,
       }),
     ).rejects.toMatchObject({
       type: "temporary",
       code: "GENUKA_INVALID_RESPONSE",
-      message:
-        "Genuka response does not contain a message ID.",
+      message: "Genuka response does not contain a message ID.",
     });
   });
 });
