@@ -23,12 +23,18 @@ export class UserRepository {
     return this.database<User>("users").where({ id }).first();
   }
 
-  async findByPhone(phone: string): Promise<User | undefined> {
-    return this.database<User>("users").where({ phone }).first();
+  async findByPhone(
+    phone: string,
+    database: Knex = this.database,
+  ): Promise<User | undefined> {
+    return database<User>("users").where({ phone }).first();
   }
 
-  async create(data: CreateUserData): Promise<User> {
-    const [user] = await this.database<User>("users")
+  async create(
+    data: CreateUserData,
+    database: Knex = this.database,
+  ): Promise<User> {
+    const [user] = await database<User>("users")
       .insert({
         phone: data.phone,
         name: data.name ?? null,
@@ -53,12 +59,15 @@ export class UserRepository {
     return user;
   }
 
-  async markPhoneAsVerified(id: string): Promise<User | undefined> {
-    const [user] = await this.database<User>("users")
+  async markPhoneAsVerified(
+    id: string,
+    database: Knex = this.database,
+  ): Promise<User | undefined> {
+    const [user] = await database<User>("users")
       .where({ id })
       .update({
-        phone_verified_at: this.database.fn.now(),
-        updated_at: this.database.fn.now(),
+        phone_verified_at: database.fn.now(),
+        updated_at: database.fn.now(),
       })
       .returning("*");
 

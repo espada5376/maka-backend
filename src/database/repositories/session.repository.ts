@@ -17,15 +17,14 @@ export interface CreateSessionData {
 
 export interface UpdateSessionData {
   expires_at?: Date;
+  user_id?: string | null;
 }
 
 export class SessionRepository {
   constructor(private readonly database: Knex = db) {}
 
   async findById(id: string): Promise<Session | undefined> {
-    return this.database<Session>("sessions")
-      .where({ id })
-      .first();
+    return this.database<Session>("sessions").where({ id }).first();
   }
 
   async findByUserId(userId: string): Promise<Session[]> {
@@ -48,8 +47,9 @@ export class SessionRepository {
   async update(
     id: string,
     data: UpdateSessionData,
+    database: Knex = this.database,
   ): Promise<Session | undefined> {
-    const [session] = await this.database<Session>("sessions")
+    const [session] = await database<Session>("sessions")
       .where({ id })
       .update(data)
       .returning("*");
@@ -58,8 +58,6 @@ export class SessionRepository {
   }
 
   async delete(id: string): Promise<number> {
-    return this.database<Session>("sessions")
-      .where({ id })
-      .del();
+    return this.database<Session>("sessions").where({ id }).del();
   }
 }

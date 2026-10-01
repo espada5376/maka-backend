@@ -2,6 +2,9 @@ import { Knex } from "knex";
 import db from "../database/knex.js";
 import { randomInt } from "node:crypto";
 
+import { UserRepository } from "../database/repositories/user.repository.js";
+import { SessionRepository } from "../database/repositories/session.repository.js";
+
 import { OtpCryptoService } from "./otp-crypto.service.js";
 import {
   OtpRepository,
@@ -19,28 +22,20 @@ export class OtpService {
     private readonly otpRepository: OtpRepository = new OtpRepository(),
     private readonly database: Knex = db,
     private readonly otpCryptoService: OtpCryptoService = new OtpCryptoService(),
-    private readonly otpDeliveryRepository: OtpDeliveryRepository =
-      new OtpDeliveryRepository(),
+    private readonly otpDeliveryRepository: OtpDeliveryRepository = new OtpDeliveryRepository(),
+    private readonly userRepository: UserRepository = new UserRepository(),
+    private readonly sessionRepository: SessionRepository = new SessionRepository(),
   ) {}
 
-  async requestOtp(
-    sessionId: string,
-    phone: string,
-  ): Promise<OtpVerification> {
+  async requestOtp(sessionId: string, phone: string): Promise<OtpVerification> {
     return this.database.transaction(async (trx) => {
-      await this.otpRepository.invalidateActive(
-        sessionId,
-        phone,
-        trx,
-      );
+      await this.otpRepository.invalidateActive(sessionId, phone, trx);
 
       const code = this.generateCode();
 
       const codeHash = this.otpCryptoService.hash(code);
 
-      const expiresAt = new Date(
-        Date.now() + OTP_EXPIRATION_MS,
-      );
+      const expiresAt = new Date(Date.now() + OTP_EXPIRATION_MS);
 
       const otp = await this.otpRepository.create(
         {
@@ -120,10 +115,40 @@ export class OtpService {
         };
       }
 
-      const consumed = await this.otpRepository.consume(
-        otp.id,
+      let user = await this.userRepository.findByPhone(otp.phone, trx);
+
+      if (!user) {
+        user = await this.userRepository.create(
+          {
+            phone: otp.phone,
+            name: null,
+          },
+          trx,
+        );
+      }
+
+      const verifiedUser = await this.userRepository.markPhoneAsVerified(
+        user.id,
         trx,
       );
+
+      if (!verifiedUser) {
+        throw new Error("Failed to verify user phone");
+      }
+
+      const updatedSession = await this.sessionRepository.update(
+        sessionId,
+        {
+          user_id: user.id,
+        },
+        trx,
+      );
+
+      if (!updatedSession) {
+        throw new Error("Session not found");
+      }
+
+      const consumed = await this.otpRepository.consume(otp.id, trx);
 
       if (!consumed) {
         return { type: "not_found" as const };
@@ -155,8 +180,6 @@ export class OtpService {
   }
 
   private generateCode(): string {
-    return randomInt(0, 1_000_000)
-      .toString()
-      .padStart(6, "0");
+    return randomInt(0, 1_000_000).toString().padStart(6, "0");
   }
 }
