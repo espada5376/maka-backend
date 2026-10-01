@@ -2,12 +2,14 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
+import { StoreController } from "./controllers/store.controller.js";
+import { createStoreRouter } from "./routes/store.routes.js";
 import { errorMiddleware } from "./common/middlewares/error.middleware.js";
 import { createSessionMiddleware } from "./common/middlewares/session.middleware.js";
 import { SessionService } from "./services/session.service.js";
 import { UserController } from "./controllers/user.controller.js";
 import { createUserRouter } from "./routes/user.routes.js";
-export function createApp(sessionService = new SessionService(), userController = new UserController()) {
+export function createApp(sessionService = new SessionService(), userController = new UserController(), storeController = new StoreController()) {
     const app = express();
     app.use(helmet());
     app.use(cors({
@@ -19,6 +21,7 @@ export function createApp(sessionService = new SessionService(), userController 
     app.use(cookieParser());
     app.use(createSessionMiddleware(sessionService));
     app.use("/api/v1/users", createUserRouter(userController));
+    app.use("/api/v1/stores", createStoreRouter(storeController));
     app.get("/api/health", (_req, res) => {
         res.status(200).json({
             success: true,

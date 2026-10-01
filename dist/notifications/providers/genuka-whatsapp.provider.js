@@ -1,7 +1,17 @@
+import { WhatsAppProviderError } from "./whatsapp.provider.js";
 export class GenukaWhatsAppProvider {
     config;
     constructor(config) {
         this.config = config;
+        if (!config.apiKey?.trim()) {
+            throw new Error("Genuka WhatsApp API key is required.");
+        }
+        if (!config.connectionId?.trim()) {
+            throw new Error("Genuka WhatsApp connection ID is required.");
+        }
+        if (!config.baseUrl?.trim()) {
+            throw new Error("Genuka WhatsApp base URL is required.");
+        }
     }
     async send(message) {
         let response;
@@ -11,6 +21,7 @@ export class GenukaWhatsAppProvider {
                 headers: {
                     Authorization: `Bearer ${this.config.apiKey}`,
                     "Content-Type": "application/json",
+                    "User-Agent": "maka-backend/1.0",
                 },
                 body: JSON.stringify({
                     connectionId: this.config.connectionId,
@@ -20,9 +31,7 @@ export class GenukaWhatsAppProvider {
             });
         }
         catch (error) {
-            throw new WhatsAppProviderError(error instanceof Error
-                ? error.message
-                : "Network error while sending WhatsApp message.", "temporary", "NETWORK_ERROR");
+            throw new WhatsAppProviderError(error instanceof Error ? error.message : "Network connection failed.", "temporary", "GENUKA_NETWORK_ERROR");
         }
         const responseBody = await this.parseResponse(response);
         if (!response.ok) {
@@ -30,7 +39,7 @@ export class GenukaWhatsAppProvider {
         }
         const providerMessageId = this.extractProviderMessageId(responseBody);
         if (!providerMessageId) {
-            throw new WhatsAppProviderError("Genuka response does not contain a message ID.", "temporary", "MISSING_MESSAGE_ID");
+            throw new WhatsAppProviderError("Genuka response does not contain a message ID.", "temporary", "GENUKA_INVALID_RESPONSE");
         }
         return {
             providerMessageId,
@@ -45,30 +54,32 @@ export class GenukaWhatsAppProvider {
         }
     }
     extractProviderMessageId(responseBody) {
-        const messageId = responseBody.data?.messageId;
+        if (!("data" in responseBody) || !responseBody.data) {
+            return undefined;
+        }
+        const messageId = responseBody.data.messageId;
         if (typeof messageId !== "string" || !messageId.trim()) {
             return undefined;
         }
         return messageId;
     }
     createProviderError(status, responseBody) {
-        const message = `Genuka WhatsApp request failed with status ${status}.`;
+        const errorCode = "error" in responseBody &&
+            typeof responseBody.error === "string" &&
+            responseBody.error.trim()
+            ? responseBody.error
+            : `HTTP_${status}`;
+        const errorMessage = "message" in responseBody &&
+            typeof responseBody.message === "string" &&
+            responseBody.message.trim()
+            ? responseBody.message
+            : `Genuka WhatsApp request failed with status ${status}.`;
         if (status === 400 || status === 401 || status === 403 || status === 404) {
-            return new WhatsAppProviderError(message, "permanent", `HTTP_${status}`);
+            return new WhatsAppProviderError(errorMessage, "permanent", errorCode);
         }
         if (status === 429 || status >= 500) {
-            return new WhatsAppProviderError(message, "temporary", `HTTP_${status}`);
+            return new WhatsAppProviderError(errorMessage, "temporary", errorCode);
         }
-        return new WhatsAppProviderError(message, "permanent", `HTTP_${status}`);
-    }
-}
-export class WhatsAppProviderError extends Error {
-    type;
-    code;
-    constructor(message, type, code) {
-        super(message);
-        this.type = type;
-        this.code = code;
-        this.name = "WhatsAppProviderError";
+        return new WhatsAppProviderError(errorMessage, "permanent", errorCode);
     }
 }

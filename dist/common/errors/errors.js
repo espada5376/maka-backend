@@ -224,4 +224,24 @@ export const Errors = {
         message: "Invalid user status",
         statusCode: 400,
     },
+    OTP_NOT_FOUND: {
+        code: "OTP_NOT_FOUND",
+        message: "No active OTP found",
+        statusCode: 404,
+    },
+    OTP_EXPIRED: {
+        code: "OTP_EXPIRED",
+        message: "OTP has expired",
+        statusCode: 400,
+    },
+    OTP_INVALID: {
+        code: "OTP_INVALID",
+        message: "Invalid OTP",
+        statusCode: 400,
+    },
+    OTP_MAX_ATTEMPTS: {
+        code: "OTP_MAX_ATTEMPTS",
+        message: "Maximum OTP attempts exceeded",
+        statusCode: 429,
+    },
 };

@@ -1,4 +1,24 @@
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import {
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+
+import type {
+  Notification,
+} from "../../src/database/repositories/notification.repository.js";
+
+import type {
+  NotificationDelivery,
+} from "../../src/database/repositories/notification-delivery.repository.js";
+
+
+import {
+  NotificationType,
+} from "../../src/notifications/types/notification-type.js";
 
 import db from "../../src/database/knex.js";
 
@@ -39,59 +59,71 @@ describe("NotificationWorker", () => {
   });
 
   it("should send a pending notification through WhatsApp", async () => {
-    const user = await userRepository.create({
-      phone: "22890000000",
-      name: "Test User",
-    });
+  const user = await userRepository.create({
+    phone: "22890000000",
+    name: "Test User",
+  });
 
-    const notification = await notificationRepository.create({
-      user_id: user.id,
-      type: "order_created",
-      title: "Nouvelle commande",
-      body: "Votre commande a été créée.",
-    });
+  const notification = await notificationRepository.create({
+    user_id: user.id,
+    type: NotificationType.NEW_ORDER_FOR_SELLER,
+    title: "Nouvelle commande",
+    body: "Vous avez reçu une nouvelle commande CMD-1042.",
+    data: {
+      order_reference: "CMD-1042",
+      total_amount: 15000,
+      currency: "FCFA",
+    },
+  });
 
-    const delivery = await notificationDeliveryRepository.create({
-      notification_id: notification.id,
-    });
+  const delivery = await notificationDeliveryRepository.create({
+    notification_id: notification.id,
+  });
 
-    const sentMessages: WhatsAppMessage[] = [];
+  const sentMessages: WhatsAppMessage[] = [];
 
-    const whatsappProvider: WhatsAppProvider = {
-      send: async (message) => {
-        sentMessages.push(message);
+  const whatsappProvider: WhatsAppProvider = {
+    send: async (message) => {
+      sentMessages.push(message);
 
-        return {
-          providerMessageId: "wamid.test-123",
-        };
-      },
-    };
+      return {
+        providerMessageId: "wamid.test-123",
+      };
+    },
+  };
 
-    const worker = new NotificationWorker(
-      notificationDeliveryRepository,
-      notificationRepository,
-      userRepository,
-      whatsappProvider,
-    );
+  const worker = new NotificationWorker(
+    notificationDeliveryRepository,
+    notificationRepository,
+    userRepository,
+    whatsappProvider,
+  );
 
-    const processed = await worker.processNext();
+  const processed = await worker.processNext();
 
-    expect(processed).toBe(true);
+  expect(processed).toBe(true);
 
-    expect(sentMessages).toHaveLength(1);
-    expect(sentMessages[0]).toEqual({
-      to: "22890000000",
-      body: "Votre commande a été créée.",
-    });
+  expect(sentMessages).toHaveLength(1);
+  expect(sentMessages[0]).toEqual({
+    to: "22890000000",
+    template: {
+      name: "new_order_seller",
+      language: "fr",
+      variables: ["CMD-1042", "15000", "FCFA"],
+    },
+  });
 
-    const updatedDelivery = await notificationDeliveryRepository.findById(
+  const updatedDelivery =
+    await notificationDeliveryRepository.findById(
       delivery.id,
     );
 
-    expect(updatedDelivery?.status).toBe("sent");
-    expect(updatedDelivery?.provider_message_id).toBe("wamid.test-123");
-    expect(updatedDelivery?.attempts).toBe(1);
-  });
+  expect(updatedDelivery?.status).toBe("sent");
+  expect(updatedDelivery?.provider_message_id).toBe(
+    "wamid.test-123",
+  );
+  expect(updatedDelivery?.attempts).toBe(1);
+});
 
   it("should return false when there is no pending delivery", async () => {
     const whatsappProvider: WhatsAppProvider = {
@@ -120,9 +152,14 @@ describe("NotificationWorker", () => {
 
     const notification = await notificationRepository.create({
       user_id: user.id,
-      type: "order_created",
-      title: "Nouvelle commande",
-      body: "Votre commande a été créée.",
+      type: NotificationType.NEW_ORDER_FOR_SELLER,
+title: "Nouvelle commande",
+body: "Vous avez reçu une nouvelle commande.",
+data: {
+  order_reference: "CMD-1042",
+  total_amount: 15000,
+  currency: "FCFA",
+},
     });
 
     const delivery = await notificationDeliveryRepository.create({
@@ -168,9 +205,14 @@ describe("NotificationWorker", () => {
 
     const notification = await notificationRepository.create({
       user_id: user.id,
-      type: "order_created",
-      title: "Nouvelle commande",
-      body: "Votre commande a été créée.",
+      type: NotificationType.NEW_ORDER_FOR_SELLER,
+title: "Nouvelle commande",
+body: "Vous avez reçu une nouvelle commande.",
+data: {
+  order_reference: "CMD-1042",
+  total_amount: 15000,
+  currency: "FCFA",
+},
     });
 
     const delivery = await notificationDeliveryRepository.create({
@@ -243,9 +285,14 @@ describe("NotificationWorker", () => {
 
     const notification = await notificationRepository.create({
       user_id: user.id,
-      type: "order_created",
-      title: "Nouvelle commande",
-      body: "Votre commande a été créée.",
+      type: NotificationType.NEW_ORDER_FOR_SELLER,
+title: "Nouvelle commande",
+body: "Vous avez reçu une nouvelle commande.",
+data: {
+  order_reference: "CMD-1042",
+  total_amount: 15000,
+  currency: "FCFA",
+},
     });
 
     const delivery = await notificationDeliveryRepository.create({
@@ -287,82 +334,186 @@ describe("NotificationWorker", () => {
     );
   });
 
-  it("should permanently fail when the notification does not exist", async () => {
-    const delivery = await notificationDeliveryRepository.create({
-      notification_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-    });
+  
+it("should permanently fail when the notification does not exist", async () => {
+  const delivery: NotificationDelivery = {
+    id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    notification_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    channel: "whatsapp",
+    status: "sending",
+    attempts: 1,
+    provider_message_id: null,
+    sent_at: null,
+    delivered_at: null,
+    read_at: null,
+    failed_at: null,
+    created_at: new Date(),
+    updated_at: new Date(),
+    processing_started_at: new Date(),
+    next_attempt_at: null,
+  };
 
-    const whatsappProvider: WhatsAppProvider = {
-      send: async () => {
-        throw new Error("Provider should not be called");
-      },
-    };
+  const claimPending = vi.fn().mockResolvedValue(delivery);
 
-    const worker = new NotificationWorker(
-      notificationDeliveryRepository,
-      notificationRepository,
-      userRepository,
-      whatsappProvider,
-    );
-
-    const processed = await worker.processNext();
-
-    expect(processed).toBe(true);
-
-    const updatedDelivery = await notificationDeliveryRepository.findById(
-      delivery.id,
-    );
-
-    expect(updatedDelivery?.status).toBe("failed");
-    expect(updatedDelivery?.attempts).toBe(1);
-    expect(updatedDelivery?.processing_started_at).toBeNull();
-    expect(updatedDelivery?.next_attempt_at).toBeNull();
-    expect(updatedDelivery?.error_code).toBe("NOTIFICATION_NOT_FOUND");
-    expect(updatedDelivery?.error_message).toBe(
+  const markFailed = vi.fn().mockResolvedValue({
+    ...delivery,
+    status: "failed",
+    failed_at: new Date(),
+    processing_started_at: null,
+    next_attempt_at: null,
+    error_code: "NOTIFICATION_NOT_FOUND",
+    error_message:
       "Notification associated with delivery was not found.",
-    );
   });
 
-  it("should permanently fail when the notification user does not exist", async () => {
-    const notification = await notificationRepository.create({
-      user_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-      type: "order_created",
-      title: "Nouvelle commande",
-      body: "Votre commande a été créée.",
-    });
+  const mockDeliveryRepository = {
+    claimPending,
+    markFailed,
+  } as unknown as NotificationDeliveryRepository;
 
-    const delivery = await notificationDeliveryRepository.create({
-      notification_id: notification.id,
-    });
+  const mockNotificationRepository = {
+    findById: vi.fn().mockResolvedValue(undefined),
+  } as unknown as NotificationRepository;
 
-    const whatsappProvider: WhatsAppProvider = {
-      send: async () => {
-        throw new Error("Provider should not be called");
-      },
-    };
+  const mockUserRepository = {
+    findById: vi.fn(),
+  } as unknown as UserRepository;
 
-    const worker = new NotificationWorker(
-      notificationDeliveryRepository,
-      notificationRepository,
-      userRepository,
-      whatsappProvider,
-    );
+  const whatsappProvider: WhatsAppProvider = {
+    send: vi.fn(),
+  };
 
-    const processed = await worker.processNext();
+  const worker = new NotificationWorker(
+    mockDeliveryRepository,
+    mockNotificationRepository,
+    mockUserRepository,
+    whatsappProvider,
+  );
 
-    expect(processed).toBe(true);
+  const processed = await worker.processNext();
 
-    const updatedDelivery = await notificationDeliveryRepository.findById(
-      delivery.id,
-    );
+  expect(processed).toBe(true);
 
-    expect(updatedDelivery?.status).toBe("failed");
-    expect(updatedDelivery?.attempts).toBe(1);
-    expect(updatedDelivery?.processing_started_at).toBeNull();
-    expect(updatedDelivery?.next_attempt_at).toBeNull();
-    expect(updatedDelivery?.error_code).toBe("USER_NOT_FOUND");
-    expect(updatedDelivery?.error_message).toBe(
+  expect(
+    mockNotificationRepository.findById,
+  ).toHaveBeenCalledWith(
+    delivery.notification_id,
+  );
+
+  expect(markFailed).toHaveBeenCalledWith(
+    delivery.id,
+    {
+      error_code: "NOTIFICATION_NOT_FOUND",
+      error_message:
+        "Notification associated with delivery was not found.",
+    },
+  );
+
+  expect(
+    whatsappProvider.send,
+  ).not.toHaveBeenCalled();
+});
+
+
+  
+it("should permanently fail when the notification user does not exist", async () => {
+  const delivery: NotificationDelivery = {
+    id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    notification_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    channel: "whatsapp",
+    status: "sending",
+    attempts: 1,
+    provider_message_id: null,
+    sent_at: null,
+    delivered_at: null,
+    read_at: null,
+    failed_at: null,
+    created_at: new Date(),
+    updated_at: new Date(),
+    processing_started_at: new Date(),
+    next_attempt_at: null,
+  };
+
+  const notification: Notification = {
+    id: delivery.notification_id,
+    user_id: "cccccccc-cccc-cccc-cccc-cccccccccccc",
+    type: NotificationType.NEW_ORDER_FOR_SELLER,
+    title: "Nouvelle commande",
+    body: "Vous avez reçu une nouvelle commande.",
+    data: {
+      order_reference: "CMD-1042",
+      total_amount: 15000,
+      currency: "FCFA",
+    },
+    read_at: null,
+    created_at: new Date(),
+  };
+
+  const claimPending = vi.fn().mockResolvedValue(delivery);
+
+  const markFailed = vi.fn().mockResolvedValue({
+    ...delivery,
+    status: "failed",
+    failed_at: new Date(),
+    processing_started_at: null,
+    next_attempt_at: null,
+    error_code: "USER_NOT_FOUND",
+    error_message:
       "User associated with notification was not found.",
-    );
   });
+
+  const mockDeliveryRepository = {
+    claimPending,
+    markFailed,
+  } as unknown as NotificationDeliveryRepository;
+
+  const mockNotificationRepository = {
+    findById: vi.fn().mockResolvedValue(notification),
+  } as unknown as NotificationRepository;
+
+  const mockUserRepository = {
+    findById: vi.fn().mockResolvedValue(undefined),
+  } as unknown as UserRepository;
+
+  const whatsappProvider: WhatsAppProvider = {
+    send: vi.fn(),
+  };
+
+  const worker = new NotificationWorker(
+    mockDeliveryRepository,
+    mockNotificationRepository,
+    mockUserRepository,
+    whatsappProvider,
+  );
+
+  const processed = await worker.processNext();
+
+  expect(processed).toBe(true);
+
+  expect(
+    mockNotificationRepository.findById,
+  ).toHaveBeenCalledWith(
+    delivery.notification_id,
+  );
+
+  expect(
+    mockUserRepository.findById,
+  ).toHaveBeenCalledWith(
+    notification.user_id,
+  );
+
+  expect(markFailed).toHaveBeenCalledWith(
+    delivery.id,
+    {
+      error_code: "USER_NOT_FOUND",
+      error_message:
+        "User associated with notification was not found.",
+    },
+  );
+
+  expect(
+    whatsappProvider.send,
+  ).not.toHaveBeenCalled();
+});
+
 });

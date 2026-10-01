@@ -13,6 +13,8 @@ export async function cleanDatabase(): Promise<void> {
       products,
       categories,
       stores,
+      otp_deliveries,
+      otp_verifications,
       sessions,
       users,
       insights
