@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { OtpCryptoService } from "../../src/services/otp-crypto.service.js";
+import {
+  OtpCryptoService,
+  OtpDecryptionError,
+} from "../../src/services/otp-crypto.service.js";
 
 describe("OtpCryptoService", () => {
   const service = new OtpCryptoService();
@@ -52,7 +55,7 @@ describe("OtpCryptoService", () => {
     expect(first).not.toBe(second);
   });
 
-  it("rejects a tampered encrypted payload", () => {
+  it("rejects a tampered encrypted payload with OtpDecryptionError", () => {
   const encrypted = service.encrypt("123456");
   const parts = encrypted.split(".");
 
@@ -60,7 +63,9 @@ describe("OtpCryptoService", () => {
   encryptedBytes[0] ^= 0xff;
   parts[2] = encryptedBytes.toString("base64");
 
-  expect(() => service.decrypt(parts.join("."))).toThrow();
+  expect(() => service.decrypt(parts.join("."))).toThrow(
+    OtpDecryptionError,
+  );
 });
 
   it("rejects a malformed encrypted payload", () => {

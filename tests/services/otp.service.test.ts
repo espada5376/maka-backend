@@ -6,6 +6,9 @@ import {
   vi,
 } from "vitest";
 
+import { UserRepository } from "../../src/database/repositories/user.repository.js";
+import { SessionRepository } from "../../src/database/repositories/session.repository.js";
+
 import {
   OtpDeliveryRepository,
 } from "../../src/database/repositories/otp-delivery.repository.js";
@@ -24,6 +27,11 @@ describe("OtpService", () => {
   const otpDeliveryRepository =
     new OtpDeliveryRepository();
   const otpCryptoService = new OtpCryptoService();
+  
+  const phone = "+22890123456";
+
+  const userRepository = new UserRepository(db);
+const sessionRepository = new SessionRepository(db);
 
   const otpService = new OtpService(
     otpRepository,
@@ -57,6 +65,7 @@ describe("OtpService", () => {
     await db("otp_deliveries").del();
 await db("otp_verifications").del();
 await db("sessions").del();
+await db("users").del();
 
     const [session] = await db("sessions")
       .insert({
@@ -70,11 +79,11 @@ await db("sessions").del();
   it("requests an OTP and creates its delivery", async () => {
   const result = await otpService.requestOtp(
     sessionId,
-    "+22890000000",
+    phone,
   );
 
   expect(result.session_id).toBe(sessionId);
-  expect(result.phone).toBe("+22890000000");
+  expect(result.phone).toBe(phone);
   expect(result.code_hash).toBeDefined();
 
   const delivery =
@@ -87,7 +96,7 @@ await db("sessions").del();
     result.id,
   );
   expect(delivery?.recipient_phone).toBe(
-    "+22890000000",
+    phone,
   );
   expect(delivery?.status).toBe("pending");
   expect(delivery?.attempts).toBe(0);
@@ -106,8 +115,42 @@ await db("sessions").del();
   ).toBe(true);
 });
 
+it("normalizes the phone number when requesting and verifying an OTP", async () => {
+  const formattedPhone = "+228 90 12 34 56";
+  const normalizedPhone = "+22890123456";
+
+  const otp = await otpService.requestOtp(
+    sessionId,
+    formattedPhone,
+  );
+
+  expect(otp.phone).toBe(normalizedPhone);
+
+  const delivery =
+    await otpDeliveryRepository.findByOtpVerificationId(
+      otp.id,
+    );
+
+  expect(delivery?.recipient_phone).toBe(
+    normalizedPhone,
+  );
+
+  const code = await getDeliveryCode(otp.id);
+
+  const result = await otpService.verifyOtp(
+    sessionId,
+    formattedPhone,
+    code,
+  );
+
+  expect(result.user.phone).toBe(normalizedPhone);
+  expect(result.user.phone_verified_at).not.toBeNull();
+});
+
+
+
 it("rolls back the OTP transaction when delivery creation fails", async () => {
-  const phone = "+22890000000";
+  
 
   const firstOtp = await otpService.requestOtp(
     sessionId,
@@ -155,7 +198,7 @@ it("rolls back the OTP transaction when delivery creation fails", async () => {
   it("verifies a valid OTP", async () => {
     const requested = await otpService.requestOtp(
       sessionId,
-      "+22890000000",
+      phone,
     );
 
     const code = await getDeliveryCode(
@@ -164,25 +207,113 @@ it("rolls back the OTP transaction when delivery creation fails", async () => {
 
      const verified = await otpService.verifyOtp(
     sessionId,
-    "+22890000000",
+    phone,
     code,
   );
 
 
-    expect(verified.id).toBe(requested.id);
-    expect(verified.consumed_at).not.toBeNull();
+    expect(verified.otp.id).toBe(requested.id);
+expect(verified.otp.consumed_at).not.toBeNull();
+expect(verified.user.phone).toBe(phone);
+expect(verified.user.phone_verified_at).not.toBeNull();
+
   });
+
+it("reuses an existing user when verifying a valid OTP", async () => {
+  
+
+  const existingUser = await userRepository.create({
+    phone,
+    name: "Test User",
+  });
+
+
+  const requested = await otpService.requestOtp(
+    sessionId,
+    phone,
+  );
+
+
+  const code = await getDeliveryCode(requested.id);
+
+  const verified = await otpService.verifyOtp(
+    sessionId,
+    phone,
+    code,
+  );
+
+  expect(verified.user.id).toBe(existingUser.id);
+
+  const users = await db("users")
+    .where({ phone });
+
+  expect(users).toHaveLength(1);
+
+  expect(verified.user.phone_verified_at).not.toBeNull();
+
+  const session = await sessionRepository.findById(sessionId);
+
+  expect(session?.user_id).toBe(existingUser.id);
+});
+
+
+it("rolls back authentication when session update fails", async () => {
+  
+
+  const failingSessionRepository = {
+    update: vi.fn().mockResolvedValue(undefined),
+  } as unknown as SessionRepository;
+
+  const failingOtpService = new OtpService(
+    otpRepository,
+    db,
+    otpCryptoService,
+    otpDeliveryRepository,
+    userRepository,
+    failingSessionRepository,
+  );
+
+  const requested = await failingOtpService.requestOtp(
+    sessionId,
+    phone,
+  );
+
+  const code = await getDeliveryCode(requested.id);
+
+  await expect(
+    failingOtpService.verifyOtp(
+      sessionId,
+      phone,
+      code,
+    ),
+  ).rejects.toMatchObject({
+    code: "SESSION_NOT_FOUND",
+  });
+
+  const user = await userRepository.findByPhone(phone);
+
+  expect(user).toBeUndefined();
+
+  const session = await sessionRepository.findById(sessionId);
+
+  expect(session?.user_id).toBeNull();
+
+  const otp = await otpRepository.findById(requested.id);
+
+  expect(otp).toBeDefined();
+  expect(otp?.consumed_at).toBeNull();
+});
 
   it("rejects an invalid OTP", async () => {
     await otpService.requestOtp(
       sessionId,
-      "+22890000000",
+      phone,
     );
 
     await expect(
       otpService.verifyOtp(
         sessionId,
-        "+22890000000",
+        phone,
         "000000",
       ),
     ).rejects.toMatchObject({
@@ -193,7 +324,7 @@ it("rolls back the OTP transaction when delivery creation fails", async () => {
   it("cannot verify a consumed OTP", async () => {
     const requested = await otpService.requestOtp(
       sessionId,
-      "+22890000000",
+      phone,
     );
 
       const code = await getDeliveryCode(
@@ -202,14 +333,14 @@ it("rolls back the OTP transaction when delivery creation fails", async () => {
 
     await otpService.verifyOtp(
       sessionId,
-      "+22890000000",
+      phone,
       code,
     );
 
     await expect(
       otpService.verifyOtp(
         sessionId,
-        "+22890000000",
+        phone,
         code,
       ),
     ).rejects.toMatchObject({
@@ -220,7 +351,7 @@ it("rolls back the OTP transaction when delivery creation fails", async () => {
 it("rejects an expired OTP", async () => {
   const requested = await otpService.requestOtp(
     sessionId,
-    "+22890000000",
+    phone,
   );
 
    
@@ -237,7 +368,7 @@ it("rejects an expired OTP", async () => {
   await expect(
     otpService.verifyOtp(
       sessionId,
-      "+22890000000",
+      phone,
       code,
     ),
   ).rejects.toMatchObject({
@@ -248,14 +379,14 @@ it("rejects an expired OTP", async () => {
 it("rejects the OTP after five invalid attempts", async () => {
   const requested = await otpService.requestOtp(
     sessionId,
-    "+22890000000",
+    phone,
   );
 
   for (let attempt = 1; attempt <= 5; attempt++) {
   await expect(
     otpService.verifyOtp(
       sessionId,
-      "+22890000000",
+      phone,
       "000000",
     ),
   ).rejects.toMatchObject({
@@ -270,7 +401,7 @@ expect(otp?.attempts).toBe(5);
 await expect(
   otpService.verifyOtp(
     sessionId,
-    "+22890000000",
+    phone,
     "000000",
   ),
 ).rejects.toMatchObject({
@@ -279,29 +410,26 @@ await expect(
 });
 
 it("invalidates the previous OTP when requesting a new one", async () => {
-  
-const first = await otpService.requestOtp(sessionId, "+22890000000");
-const firstCode = await getDeliveryCode(first.id);
+  const first = await otpService.requestOtp(sessionId, phone);
+  const firstCode = await getDeliveryCode(first.id);
 
-const second = await otpService.requestOtp(sessionId, "+22890000000");
-const secondCode = await getDeliveryCode(second.id);
+  const second = await otpService.requestOtp(sessionId, phone);
 
-const firstOtp = await otpRepository.findById(first.id);
-const secondOtp = await otpRepository.findById(second.id);
+  const firstOtp = await otpRepository.findById(first.id);
+  const secondOtp = await otpRepository.findById(second.id);
 
-expect(firstOtp?.invalidated_at).not.toBeNull();
-expect(secondOtp?.invalidated_at).toBeNull();
+  expect(firstOtp?.invalidated_at).not.toBeNull();
+  expect(secondOtp?.invalidated_at).toBeNull();
 
-await expect(
-  otpService.verifyOtp(
-    sessionId,
-    +22890000000,
-    firstCode,
-  ),
-).rejects.toMatchObject({
-  code: "OTP_NOT_FOUND",
-});
-
+  await expect(
+    otpService.verifyOtp(
+      sessionId,
+      phone,
+      firstCode,
+    ),
+  ).rejects.toMatchObject({
+    code: "OTP_INVALID",
+  });
 });
 
 });

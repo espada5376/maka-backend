@@ -25,23 +25,25 @@ describe("DB speed", () => {
   it("TRUNCATE", async () => {
     const start = performance.now();
 
-    await db.raw(`
-    TRUNCATE TABLE
-      notifications,
-      events,
-      order_items,
-      orders,
-      cart_items,
-      carts,
-      product_images,
-      products,
-      categories,
-      stores,
-      sessions,
-      users,
-      insights
-    
-  `);
+  await db.raw(`
+  TRUNCATE TABLE
+    notification_deliveries,
+    notifications,
+    otp_deliveries,
+    otp_verifications,
+    events,
+    order_items,
+    orders,
+    cart_items,
+    carts,
+    product_images,
+    products,
+    categories,
+    stores,
+    sessions,
+    users,
+    insights
+`);
 
     console.log(`TRUNCATE: ${Math.round(performance.now() - start)}ms`);
 

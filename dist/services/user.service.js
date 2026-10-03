@@ -1,10 +1,13 @@
 import { UserRepository, } from "../database/repositories/user.repository.js";
+import { PhoneService } from "./phone.service.js";
 import { createAppError } from "../common/errors/create-app-error.js";
 import { Errors } from "../common/errors/errors.js";
 export class UserService {
     userRepository;
-    constructor(userRepository = new UserRepository()) {
+    phoneService;
+    constructor(userRepository = new UserRepository(), phoneService = new PhoneService()) {
         this.userRepository = userRepository;
+        this.phoneService = phoneService;
     }
     async getById(id) {
         const user = await this.userRepository.findById(id);
@@ -14,7 +17,7 @@ export class UserService {
         return user;
     }
     async getByPhone(phone) {
-        const normalizedPhone = this.normalizePhone(phone);
+        const normalizedPhone = this.phoneService.normalize(phone);
         const user = await this.userRepository.findByPhone(normalizedPhone);
         if (!user) {
             throw createAppError(Errors.USER_NOT_FOUND);
@@ -22,7 +25,7 @@ export class UserService {
         return user;
     }
     async create(data) {
-        const phone = this.normalizePhone(data.phone);
+        const phone = this.phoneService.normalize(data.phone);
         const name = this.normalizeName(data.name);
         const existingUser = await this.userRepository.findByPhone(phone);
         if (existingUser) {
@@ -55,16 +58,6 @@ export class UserService {
             throw createAppError(Errors.USER_NOT_FOUND);
         }
         return user;
-    }
-    normalizePhone(phone) {
-        if (typeof phone !== "string") {
-            throw createAppError(Errors.INVALID_PHONE);
-        }
-        const normalizedPhone = phone.trim();
-        if (!normalizedPhone || normalizedPhone.length > 20) {
-            throw createAppError(Errors.INVALID_PHONE);
-        }
-        return normalizedPhone;
     }
     normalizeName(name) {
         if (name === null || name === undefined) {

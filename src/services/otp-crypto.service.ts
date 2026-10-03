@@ -111,20 +111,19 @@ export class OtpCryptoService {
 
     const key = getEncryptionKey();
 
-    const decipher = createDecipheriv(
-      ENCRYPTION_ALGORITHM,
-      key,
-      iv,
-    );
+try {
+  const decipher = createDecipheriv(ENCRYPTION_ALGORITHM, key, iv);
+  decipher.setAuthTag(authTag);
 
-    decipher.setAuthTag(authTag);
+  const decrypted = Buffer.concat([
+    decipher.update(encrypted),
+    decipher.final(),
+  ]);
 
-    const decrypted = Buffer.concat([
-      decipher.update(encrypted),
-      decipher.final(),
-    ]);
-
-    return decrypted.toString("utf8");
+  return decrypted.toString("utf8");
+} catch {
+  throw new OtpDecryptionError();
+}
   }
 }
 

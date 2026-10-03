@@ -22,6 +22,12 @@ function getEncryptionKey() {
     }
     return key;
 }
+export class OtpDecryptionError extends Error {
+    constructor(message = "Invalid encrypted OTP payload") {
+        super(message);
+        this.name = "OtpDecryptionError";
+    }
+}
 export class OtpCryptoService {
     hash(code) {
         return createHmac(HASH_ALGORITHM, getHashSecret())
@@ -54,7 +60,7 @@ export class OtpCryptoService {
     decrypt(payload) {
         const parts = payload.split(".");
         if (parts.length !== 3) {
-            throw new Error("Invalid encrypted OTP payload");
+            throw new OtpDecryptionError();
         }
         const [ivEncoded, authTagEncoded, encryptedEncoded] = parts;
         const iv = Buffer.from(ivEncoded, "base64");
@@ -62,16 +68,21 @@ export class OtpCryptoService {
         const encrypted = Buffer.from(encryptedEncoded, "base64");
         if (iv.length !== IV_LENGTH ||
             authTag.length !== AUTH_TAG_LENGTH) {
-            throw new Error("Invalid encrypted OTP payload");
+            throw new OtpDecryptionError();
         }
         const key = getEncryptionKey();
-        const decipher = createDecipheriv(ENCRYPTION_ALGORITHM, key, iv);
-        decipher.setAuthTag(authTag);
-        const decrypted = Buffer.concat([
-            decipher.update(encrypted),
-            decipher.final(),
-        ]);
-        return decrypted.toString("utf8");
+        try {
+            const decipher = createDecipheriv(ENCRYPTION_ALGORITHM, key, iv);
+            decipher.setAuthTag(authTag);
+            const decrypted = Buffer.concat([
+                decipher.update(encrypted),
+                decipher.final(),
+            ]);
+            return decrypted.toString("utf8");
+        }
+        catch {
+            throw new OtpDecryptionError();
+        }
     }
 }
 export const otpCryptoService = new OtpCryptoService();

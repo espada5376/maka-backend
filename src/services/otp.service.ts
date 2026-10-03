@@ -2,7 +2,13 @@ import { Knex } from "knex";
 import db from "../database/knex.js";
 import { randomInt } from "node:crypto";
 
-import { UserRepository } from "../database/repositories/user.repository.js";
+import { PhoneService } from "./phone.service.js";
+
+import {
+  UserRepository,
+  type User,
+} from "../database/repositories/user.repository.js";
+
 import { SessionRepository } from "../database/repositories/session.repository.js";
 
 import { OtpCryptoService } from "./otp-crypto.service.js";
@@ -25,11 +31,18 @@ export class OtpService {
     private readonly otpDeliveryRepository: OtpDeliveryRepository = new OtpDeliveryRepository(),
     private readonly userRepository: UserRepository = new UserRepository(),
     private readonly sessionRepository: SessionRepository = new SessionRepository(),
+    private readonly phoneService: PhoneService = new PhoneService(),
+
+
   ) {}
 
   async requestOtp(sessionId: string, phone: string): Promise<OtpVerification> {
+
+    const normalizedPhone = this.phoneService.normalize(phone);
+
     return this.database.transaction(async (trx) => {
-      await this.otpRepository.invalidateActive(sessionId, phone, trx);
+
+      await this.otpRepository.invalidateActive(sessionId, normalizedPhone, trx);
 
       const code = this.generateCode();
 
@@ -40,7 +53,7 @@ export class OtpService {
       const otp = await this.otpRepository.create(
         {
           session_id: sessionId,
-          phone,
+          phone: normalizedPhone,
           code_hash: codeHash,
           expires_at: expiresAt,
         },
@@ -50,7 +63,7 @@ export class OtpService {
       await this.otpDeliveryRepository.create(
         {
           otp_verification_id: otp.id,
-          recipient_phone: phone,
+          recipient_phone: normalizedPhone,
           encrypted_code: this.otpCryptoService.encrypt(code),
         },
         trx,
@@ -61,14 +74,20 @@ export class OtpService {
   }
 
   async verifyOtp(
-    sessionId: string,
-    phone: string,
-    code: string,
-  ): Promise<OtpVerification> {
+  sessionId: string,
+  phone: string,
+  code: string,
+): Promise<{
+  user: User;
+  otp: OtpVerification;
+}> {
+
+     const normalizedPhone = this.phoneService.normalize(phone);
+
     const result = await this.database.transaction(async (trx) => {
       const otp = await this.otpRepository.findLatestPendingForUpdate(
         sessionId,
-        phone,
+        normalizedPhone,
         trx,
       );
 
@@ -145,8 +164,8 @@ export class OtpService {
       );
 
       if (!updatedSession) {
-        throw new Error("Session not found");
-      }
+  throw createAppError(Errors.SESSION_NOT_FOUND);
+}
 
       const consumed = await this.otpRepository.consume(otp.id, trx);
 
@@ -155,28 +174,29 @@ export class OtpService {
       }
 
       return {
-        type: "success" as const,
-        otp: consumed,
-      };
+  type: "success" as const,
+  user: verifiedUser,
+  otp: consumed,
+};
     });
 
     if (result.type === "not_found") {
-      throw createAppError(Errors.OTP_NOT_FOUND);
-    }
+  throw createAppError(Errors.OTP_NOT_FOUND);
+}
 
-    if (result.type === "expired") {
-      throw createAppError(Errors.OTP_EXPIRED);
-    }
+if (result.type === "expired") {
+  throw createAppError(Errors.OTP_EXPIRED);
+}
 
-    if (result.type === "max_attempts") {
-      throw createAppError(Errors.OTP_MAX_ATTEMPTS);
-    }
+if (result.type === "max_attempts") {
+  throw createAppError(Errors.OTP_MAX_ATTEMPTS);
+}
 
-    if (result.type === "invalid") {
-      throw createAppError(Errors.OTP_INVALID);
-    }
+if (result.type === "invalid") {
+  throw createAppError(Errors.OTP_INVALID);
+}
 
-    return result.otp;
+return result;
   }
 
   private generateCode(): string {

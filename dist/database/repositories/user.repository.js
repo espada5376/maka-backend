@@ -7,11 +7,11 @@ export class UserRepository {
     async findById(id) {
         return this.database("users").where({ id }).first();
     }
-    async findByPhone(phone) {
-        return this.database("users").where({ phone }).first();
+    async findByPhone(phone, database = this.database) {
+        return database("users").where({ phone }).first();
     }
-    async create(data) {
-        const [user] = await this.database("users")
+    async create(data, database = this.database) {
+        const [user] = await database("users")
             .insert({
             phone: data.phone,
             name: data.name ?? null,
@@ -29,12 +29,12 @@ export class UserRepository {
             .returning("*");
         return user;
     }
-    async markPhoneAsVerified(id) {
-        const [user] = await this.database("users")
+    async markPhoneAsVerified(id, database = this.database) {
+        const [user] = await database("users")
             .where({ id })
             .update({
-            phone_verified_at: this.database.fn.now(),
-            updated_at: this.database.fn.now(),
+            phone_verified_at: database.fn.now(),
+            updated_at: database.fn.now(),
         })
             .returning("*");
         return user;

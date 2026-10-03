@@ -4,13 +4,16 @@ import {
   type CreateUserData,
 } from "../database/repositories/user.repository.js";
 
+import { PhoneService } from "./phone.service.js";
+
 import { createAppError } from "../common/errors/create-app-error.js";
 import { Errors } from "../common/errors/errors.js";
 
 export class UserService {
   constructor(
-    private readonly userRepository: UserRepository = new UserRepository(),
-  ) {}
+  private readonly userRepository: UserRepository = new UserRepository(),
+  private readonly phoneService: PhoneService = new PhoneService(),
+) {}
 
   async getById(id: string): Promise<User> {
     const user = await this.userRepository.findById(id);
@@ -23,7 +26,7 @@ export class UserService {
   }
 
   async getByPhone(phone: string): Promise<User> {
-    const normalizedPhone = this.normalizePhone(phone);
+    const normalizedPhone = this.phoneService.normalize(phone);
 
     const user = await this.userRepository.findByPhone(normalizedPhone);
 
@@ -35,7 +38,7 @@ export class UserService {
   }
 
   async create(data: CreateUserData): Promise<User> {
-    const phone = this.normalizePhone(data.phone);
+    const phone = this.phoneService.normalize(data.phone);
     const name = this.normalizeName(data.name);
 
     const existingUser = await this.userRepository.findByPhone(phone);
@@ -87,20 +90,7 @@ export class UserService {
     return user;
   }
 
-  private normalizePhone(phone: string): string {
-    if (typeof phone !== "string") {
-      throw createAppError(Errors.INVALID_PHONE);
-    }
-
-    const normalizedPhone = phone.trim();
-
-    if (!normalizedPhone || normalizedPhone.length > 20) {
-      throw createAppError(Errors.INVALID_PHONE);
-    }
-
-    return normalizedPhone;
-  }
-
+  
   private normalizeName(name: string | null | undefined): string | null {
     if (name === null || name === undefined) {
       return null;

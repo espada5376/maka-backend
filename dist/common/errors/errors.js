@@ -104,14 +104,44 @@ export const Errors = {
         message: "Invalid store status transition",
         statusCode: 400,
     },
-    CATEGORY_NOT_FOUND: {
-        code: "CATEGORY_NOT_FOUND",
-        message: "Category not found",
+    CATEGORY_INVALID_NAME: {
+        code: "CATEGORY_INVALID_NAME",
+        message: "Invalid category name",
+        statusCode: 400,
+    },
+    CATEGORY_INVALID_SLUG: {
+        code: "CATEGORY_INVALID_SLUG",
+        message: "Invalid category slug",
+        statusCode: 400,
+    },
+    CATEGORY_SLUG_ALREADY_EXISTS: {
+        code: "CATEGORY_SLUG_ALREADY_EXISTS",
+        message: "Category slug already exists",
+        statusCode: 409,
+    },
+    CATEGORY_PARENT_NOT_FOUND: {
+        code: "CATEGORY_PARENT_NOT_FOUND",
+        message: "Parent category not found",
         statusCode: 404,
     },
-    CATEGORY_INACTIVE: {
-        code: "CATEGORY_INACTIVE",
-        message: "Category is inactive",
+    CATEGORY_PARENT_INACTIVE: {
+        code: "CATEGORY_PARENT_INACTIVE",
+        message: "Parent category is inactive",
+        statusCode: 400,
+    },
+    CATEGORY_INVALID_PARENT: {
+        code: "CATEGORY_INVALID_PARENT",
+        message: "Invalid category parent",
+        statusCode: 400,
+    },
+    CATEGORY_MAX_DEPTH_REACHED: {
+        code: "CATEGORY_MAX_DEPTH_REACHED",
+        message: "Category hierarchy cannot exceed two levels",
+        statusCode: 400,
+    },
+    CATEGORY_INVALID_STATUS: {
+        code: "CATEGORY_INVALID_STATUS",
+        message: "Invalid category status",
         statusCode: 400,
     },
     PRODUCT_FORBIDDEN: {

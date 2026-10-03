@@ -10,11 +10,14 @@ import { createSessionMiddleware } from "./common/middlewares/session.middleware
 import { SessionService } from "./services/session.service.js";
 import { UserController } from "./controllers/user.controller.js";
 import { createUserRouter } from "./routes/user.routes.js";
+import { createAuthRouter } from "./routes/auth.routes.js";
+import { AuthController } from "./controllers/auth.controller.js";
 
 export function createApp(
   sessionService: SessionService = new SessionService(),
   userController: UserController = new UserController(),
   storeController: StoreController = new StoreController(),
+  authController: AuthController = new AuthController(),
 ) {
   const app = express();
 
@@ -38,6 +41,8 @@ export function createApp(
   "/api/v1/stores",
   createStoreRouter(storeController),
 );  
+
+  app.use("/api/v1/auth", createAuthRouter(authController));
 
   app.get("/api/health", (_req, res) => {
     res.status(200).json({

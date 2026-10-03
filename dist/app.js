@@ -9,7 +9,9 @@ import { createSessionMiddleware } from "./common/middlewares/session.middleware
 import { SessionService } from "./services/session.service.js";
 import { UserController } from "./controllers/user.controller.js";
 import { createUserRouter } from "./routes/user.routes.js";
-export function createApp(sessionService = new SessionService(), userController = new UserController(), storeController = new StoreController()) {
+import { createAuthRouter } from "./routes/auth.routes.js";
+import { AuthController } from "./controllers/auth.controller.js";
+export function createApp(sessionService = new SessionService(), userController = new UserController(), storeController = new StoreController(), authController = new AuthController()) {
     const app = express();
     app.use(helmet());
     app.use(cors({
@@ -22,6 +24,7 @@ export function createApp(sessionService = new SessionService(), userController 
     app.use(createSessionMiddleware(sessionService));
     app.use("/api/v1/users", createUserRouter(userController));
     app.use("/api/v1/stores", createStoreRouter(storeController));
+    app.use("/api/v1/auth", createAuthRouter(authController));
     app.get("/api/health", (_req, res) => {
         res.status(200).json({
             success: true,
