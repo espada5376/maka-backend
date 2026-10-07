@@ -1,10 +1,8 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
 
-import {
-  CartService,
-  CartServiceError,
-  CartErrorCode,
-} from "../../src/services/cart.service.js";
+import { CartService } from "../../src/services/cart.service.js";
+
+import { Errors } from "../../src/common/errors/errors.js";
 
 import type { Cart } from "../../src/database/repositories/cart.repository.js";
 import type {
@@ -13,6 +11,8 @@ import type {
 } from "../../src/database/repositories/cart-item.repository.js";
 import type { Product } from "../../src/database/repositories/product.repository.js";
 import type { Store } from "../../src/database/repositories/store.repository.js";
+
+import { expectAppError } from "../helpers/expect-app-error.js";
 
 const mocks = vi.hoisted(() => ({
   database: {
@@ -242,9 +242,9 @@ describe("CartService", () => {
     it("should reject when the cart does not exist", async () => {
       mocks.cartRepository.findBySessionId.mockResolvedValue(undefined);
 
-      await expect(cartService.getCart(sessionId)).rejects.toMatchObject({
-        code: CartErrorCode.CART_NOT_FOUND,
-      });
+      await expect(cartService.getCart(sessionId)).rejects.toMatchObject(
+        expectAppError(Errors.CART_NOT_FOUND),
+      );
     });
 
     it("should load all cart items with product and store context", async () => {
@@ -382,41 +382,41 @@ describe("CartService", () => {
     it("should reject a quantity equal to zero", async () => {
       await expect(
         cartService.addItem(sessionId, productId, 0),
-      ).rejects.toMatchObject({
-        code: "INVALID_QUANTITY",
-      });
+      ).rejects.toMatchObject(
+        expectAppError(Errors.INVALID_CART_ITEM_QUANTITY),
+      );
     });
 
     it("should reject a negative quantity", async () => {
       await expect(
         cartService.addItem(sessionId, productId, -1),
-      ).rejects.toMatchObject({
-        code: "INVALID_QUANTITY",
-      });
+      ).rejects.toMatchObject(
+        expectAppError(Errors.INVALID_CART_ITEM_QUANTITY),
+      );
     });
 
     it("should reject a non-integer quantity", async () => {
       await expect(
         cartService.addItem(sessionId, productId, 1.5),
-      ).rejects.toMatchObject({
-        code: "INVALID_QUANTITY",
-      });
+      ).rejects.toMatchObject(
+        expectAppError(Errors.INVALID_CART_ITEM_QUANTITY),
+      );
     });
 
     it("should reject NaN as a quantity", async () => {
       await expect(
         cartService.addItem(sessionId, productId, Number.NaN),
-      ).rejects.toMatchObject({
-        code: "INVALID_QUANTITY",
-      });
+      ).rejects.toMatchObject(
+        expectAppError(Errors.INVALID_CART_ITEM_QUANTITY),
+      );
     });
 
     it("should reject Infinity as a quantity", async () => {
       await expect(
         cartService.addItem(sessionId, productId, Infinity),
-      ).rejects.toMatchObject({
-        code: "INVALID_QUANTITY",
-      });
+      ).rejects.toMatchObject(
+        expectAppError(Errors.INVALID_CART_ITEM_QUANTITY),
+      );
     });
 
     it("should reject when the cart does not exist", async () => {
@@ -424,9 +424,7 @@ describe("CartService", () => {
 
       await expect(
         cartService.addItem(sessionId, productId, 1),
-      ).rejects.toMatchObject({
-        code: CartErrorCode.CART_NOT_FOUND,
-      });
+      ).rejects.toMatchObject(expectAppError(Errors.CART_NOT_FOUND));
     });
 
     it("should reject when the product does not exist", async () => {
@@ -434,9 +432,7 @@ describe("CartService", () => {
 
       await expect(
         cartService.addItem(sessionId, productId, 1),
-      ).rejects.toMatchObject({
-        code: CartErrorCode.PRODUCT_NOT_FOUND,
-      });
+      ).rejects.toMatchObject(expectAppError(Errors.PRODUCT_NOT_FOUND));
     });
 
     it("should reject when the store does not exist", async () => {
@@ -444,9 +440,7 @@ describe("CartService", () => {
 
       await expect(
         cartService.addItem(sessionId, productId, 1),
-      ).rejects.toMatchObject({
-        code: CartErrorCode.STORE_NOT_FOUND,
-      });
+      ).rejects.toMatchObject(expectAppError(Errors.STORE_NOT_FOUND));
     });
 
     it("should reject when the store is inactive", async () => {
@@ -454,9 +448,7 @@ describe("CartService", () => {
 
       await expect(
         cartService.addItem(sessionId, productId, 1),
-      ).rejects.toMatchObject({
-        code: CartErrorCode.STORE_INACTIVE,
-      });
+      ).rejects.toMatchObject(expectAppError(Errors.STORE_INACTIVE));
     });
 
     it("should reject when the product is archived", async () => {
@@ -464,9 +456,7 @@ describe("CartService", () => {
 
       await expect(
         cartService.addItem(sessionId, productId, 1),
-      ).rejects.toMatchObject({
-        code: CartErrorCode.PRODUCT_INACTIVE,
-      });
+      ).rejects.toMatchObject(expectAppError(Errors.PRODUCT_INACTIVE));
     });
 
     it("should reject when the product is unavailable", async () => {
@@ -474,9 +464,7 @@ describe("CartService", () => {
 
       await expect(
         cartService.addItem(sessionId, productId, 1),
-      ).rejects.toMatchObject({
-        code: CartErrorCode.PRODUCT_UNAVAILABLE,
-      });
+      ).rejects.toMatchObject(expectAppError(Errors.PRODUCT_UNAVAILABLE));
     });
 
     it("should create a new item when the product is not already in the cart", async () => {
@@ -577,9 +565,7 @@ describe("CartService", () => {
 
       await expect(
         cartService.addItem(sessionId, productId, 1),
-      ).rejects.toMatchObject({
-        code: CartErrorCode.MULTIPLE_STORES,
-      });
+      ).rejects.toMatchObject(expectAppError(Errors.MULTIPLE_STORES_IN_CART));
     });
 
     it("should allow another product from the same store", async () => {
@@ -730,41 +716,41 @@ describe("CartService", () => {
     it("should reject a quantity equal to zero", async () => {
       await expect(
         cartService.updateItemQuantity(sessionId, itemId, 0),
-      ).rejects.toMatchObject({
-        code: "INVALID_QUANTITY",
-      });
+      ).rejects.toMatchObject(
+        expectAppError(Errors.INVALID_CART_ITEM_QUANTITY),
+      );
     });
 
     it("should reject a negative quantity", async () => {
       await expect(
         cartService.updateItemQuantity(sessionId, itemId, -2),
-      ).rejects.toMatchObject({
-        code: "INVALID_QUANTITY",
-      });
+      ).rejects.toMatchObject(
+        expectAppError(Errors.INVALID_CART_ITEM_QUANTITY),
+      );
     });
 
     it("should reject a non-integer quantity", async () => {
       await expect(
         cartService.updateItemQuantity(sessionId, itemId, 2.5),
-      ).rejects.toMatchObject({
-        code: "INVALID_QUANTITY",
-      });
+      ).rejects.toMatchObject(
+        expectAppError(Errors.INVALID_CART_ITEM_QUANTITY),
+      );
     });
 
     it("should reject NaN as a quantity", async () => {
       await expect(
         cartService.updateItemQuantity(sessionId, itemId, Number.NaN),
-      ).rejects.toMatchObject({
-        code: "INVALID_QUANTITY",
-      });
+      ).rejects.toMatchObject(
+        expectAppError(Errors.INVALID_CART_ITEM_QUANTITY),
+      );
     });
 
     it("should reject Infinity as a quantity", async () => {
       await expect(
         cartService.updateItemQuantity(sessionId, itemId, Infinity),
-      ).rejects.toMatchObject({
-        code: "INVALID_QUANTITY",
-      });
+      ).rejects.toMatchObject(
+        expectAppError(Errors.INVALID_CART_ITEM_QUANTITY),
+      );
     });
 
     it("should reject when the cart does not exist", async () => {
@@ -772,9 +758,7 @@ describe("CartService", () => {
 
       await expect(
         cartService.updateItemQuantity(sessionId, itemId, 2),
-      ).rejects.toMatchObject({
-        code: CartErrorCode.CART_NOT_FOUND,
-      });
+      ).rejects.toMatchObject(expectAppError(Errors.CART_NOT_FOUND));
     });
 
     it("should reject when the item does not exist", async () => {
@@ -782,9 +766,7 @@ describe("CartService", () => {
 
       await expect(
         cartService.updateItemQuantity(sessionId, itemId, 2),
-      ).rejects.toMatchObject({
-        code: CartErrorCode.ITEM_NOT_FOUND,
-      });
+      ).rejects.toMatchObject(expectAppError(Errors.CART_ITEM_NOT_FOUND));
     });
 
     it("should reject an item belonging to another cart", async () => {
@@ -795,9 +777,7 @@ describe("CartService", () => {
 
       await expect(
         cartService.updateItemQuantity(sessionId, itemId, 2),
-      ).rejects.toMatchObject({
-        code: CartErrorCode.ITEM_NOT_FOUND,
-      });
+      ).rejects.toMatchObject(expectAppError(Errors.CART_ITEM_NOT_FOUND));
     });
 
     // -------------------------------------------------------------------------
@@ -911,9 +891,7 @@ describe("CartService", () => {
 
       await expect(
         cartService.removeItem(sessionId, itemId),
-      ).rejects.toMatchObject({
-        code: CartErrorCode.CART_NOT_FOUND,
-      });
+      ).rejects.toMatchObject(expectAppError(Errors.CART_NOT_FOUND));
     });
 
     it("should reject when the item does not exist", async () => {
@@ -921,9 +899,7 @@ describe("CartService", () => {
 
       await expect(
         cartService.removeItem(sessionId, itemId),
-      ).rejects.toMatchObject({
-        code: CartErrorCode.ITEM_NOT_FOUND,
-      });
+      ).rejects.toMatchObject(expectAppError(Errors.CART_ITEM_NOT_FOUND));
     });
 
     it("should reject an item belonging to another cart", async () => {
@@ -934,9 +910,7 @@ describe("CartService", () => {
 
       await expect(
         cartService.removeItem(sessionId, itemId),
-      ).rejects.toMatchObject({
-        code: CartErrorCode.ITEM_NOT_FOUND,
-      });
+      ).rejects.toMatchObject(expectAppError(Errors.CART_ITEM_NOT_FOUND));
     });
 
     // -------------------------------------------------------------------------
@@ -1069,9 +1043,7 @@ describe("CartService", () => {
 
       await expect(
         cartService.addItem(sessionId, productId, 1),
-      ).rejects.toMatchObject({
-        code: CartErrorCode.PRODUCT_NOT_FOUND,
-      });
+      ).rejects.toMatchObject(expectAppError(Errors.PRODUCT_NOT_FOUND));
 
       expect(mocks.eventRepository.create).not.toHaveBeenCalled();
     });
@@ -1081,9 +1053,7 @@ describe("CartService", () => {
 
       await expect(
         cartService.addItem(sessionId, productId, 1),
-      ).rejects.toMatchObject({
-        code: CartErrorCode.CART_NOT_FOUND,
-      });
+      ).rejects.toMatchObject(expectAppError(Errors.CART_NOT_FOUND));
 
       expect(mocks.eventRepository.create).not.toHaveBeenCalled();
     });
@@ -1093,9 +1063,7 @@ describe("CartService", () => {
 
       await expect(
         cartService.updateItemQuantity(sessionId, itemId, 4),
-      ).rejects.toMatchObject({
-        code: CartErrorCode.ITEM_NOT_FOUND,
-      });
+      ).rejects.toMatchObject(expectAppError(Errors.CART_ITEM_NOT_FOUND));
 
       expect(mocks.eventRepository.create).not.toHaveBeenCalled();
     });
@@ -1105,9 +1073,7 @@ describe("CartService", () => {
 
       await expect(
         cartService.removeItem(sessionId, itemId),
-      ).rejects.toMatchObject({
-        code: CartErrorCode.ITEM_NOT_FOUND,
-      });
+      ).rejects.toMatchObject(expectAppError(Errors.CART_ITEM_NOT_FOUND));
 
       expect(mocks.eventRepository.create).not.toHaveBeenCalled();
     });

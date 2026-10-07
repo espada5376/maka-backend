@@ -4,19 +4,19 @@ import helmet from "helmet";
 import cookieParser from "cookie-parser";
 
 import { ProductImageController } from "./controllers/product-image.controller.js";
-import { createProductImageRouter } from "./routes/product-image.routes.js";
+import { createProductImageRouter } from "./common/http/routes/product-image.routes.js";
 
 import { StoreController } from "./controllers/store.controller.js";
-import { createStoreRouter } from "./routes/store.routes.js";
+import { createStoreRouter } from "./common/http/routes/store.routes.js";
 
 import { errorMiddleware } from "./common/middlewares/error.middleware.js";
 import { createSessionMiddleware } from "./common/middlewares/session.middleware.js";
 import { SessionService } from "./services/session.service.js";
 
 import { UserController } from "./controllers/user.controller.js";
-import { createUserRouter } from "./routes/user.routes.js";
+import { createUserRouter } from "./common/http/routes/user.routes.js";
 
-import { createAuthRouter } from "./routes/auth.routes.js";
+import { createAuthRouter } from "./common/http/routes/auth.routes.js";
 import { AuthController } from "./controllers/auth.controller.js";
 
 import { ProductImageRepository } from "./database/repositories/product-image.repository.js";
@@ -76,17 +76,11 @@ export function createApp(
 
   app.use("/api/v1/users", createUserRouter(userController));
 
-  app.use(
-    "/api/v1/stores",
-    createStoreRouter(storeController),
-  );
+  app.use("/api/v1/stores", createStoreRouter(storeController));
 
   app.use("/api/v1/auth", createAuthRouter(authController));
 
-  app.use(
-    "/api/v1/products",
-    createProductImageRouter(productImageController),
-  );
+  app.use("/api/v1/products", createProductImageRouter(productImageController));
 
   app.get("/api/health", (_req, res) => {
     res.status(200).json({

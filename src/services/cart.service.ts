@@ -1,4 +1,3 @@
-
 import { Knex } from "knex";
 
 import db from "../database/knex.js";
@@ -8,6 +7,9 @@ import { CartItemRepository } from "../database/repositories/cart-item.repositor
 import { ProductRepository } from "../database/repositories/product.repository.js";
 import { StoreRepository } from "../database/repositories/store.repository.js";
 import { EventRepository } from "../database/repositories/event.repository.js";
+import { createAppError } from "../common/errors/create-app-error.js";
+
+import { Errors } from "../common/errors/errors.js";
 
 export type CartItemState = "available" | "unavailable";
 
@@ -25,28 +27,6 @@ export interface CartView {
   items: CartItemWithState[];
 }
 
-export class CartServiceError extends Error {
-  constructor(
-    public readonly code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = "CartServiceError";
-  }
-}
-
-export const CartErrorCode = {
-  CART_NOT_FOUND: "CART_NOT_FOUND",
-  PRODUCT_NOT_FOUND: "PRODUCT_NOT_FOUND",
-  STORE_NOT_FOUND: "STORE_NOT_FOUND",
-  STORE_INACTIVE: "STORE_INACTIVE",
-  PRODUCT_INACTIVE: "PRODUCT_INACTIVE",
-  PRODUCT_UNAVAILABLE: "PRODUCT_UNAVAILABLE",
-  MULTIPLE_STORES: "MULTIPLE_STORES",
-  ITEM_NOT_FOUND: "ITEM_NOT_FOUND",
-  INVALID_QUANTITY: "INVALID_QUANTITY",
-} as const;
-
 export class CartService {
   constructor(
     private readonly database: Knex = db,
@@ -61,10 +41,7 @@ export class CartService {
     const cart = await this.cartRepository.findBySessionId(sessionId);
 
     if (!cart) {
-      throw new CartServiceError(
-        CartErrorCode.CART_NOT_FOUND,
-        "Cart not found",
-      );
+      throw createAppError(Errors.CART_NOT_FOUND);
     }
 
     const items = await this.cartItemRepository.findByCartIdWithProductContext(
@@ -99,49 +76,31 @@ export class CartService {
     const cart = await this.cartRepository.findBySessionId(sessionId);
 
     if (!cart) {
-      throw new CartServiceError(
-        CartErrorCode.CART_NOT_FOUND,
-        "Cart not found",
-      );
+      throw createAppError(Errors.CART_NOT_FOUND);
     }
 
     const product = await this.productRepository.findById(productId);
 
     if (!product) {
-      throw new CartServiceError(
-        CartErrorCode.PRODUCT_NOT_FOUND,
-        "Product not found",
-      );
+      throw createAppError(Errors.PRODUCT_NOT_FOUND);
     }
 
     const store = await this.storeRepository.findById(product.store_id);
 
     if (!store) {
-      throw new CartServiceError(
-        CartErrorCode.STORE_NOT_FOUND,
-        "Store not found",
-      );
+      throw createAppError(Errors.STORE_NOT_FOUND);
     }
 
     if (store.status !== "active") {
-      throw new CartServiceError(
-        CartErrorCode.STORE_INACTIVE,
-        "Store is inactive",
-      );
+      throw createAppError(Errors.STORE_INACTIVE);
     }
 
     if (product.status !== "active") {
-      throw new CartServiceError(
-        CartErrorCode.PRODUCT_INACTIVE,
-        "Product is inactive",
-      );
+      throw createAppError(Errors.PRODUCT_INACTIVE);
     }
 
     if (product.availability !== "available") {
-      throw new CartServiceError(
-        CartErrorCode.PRODUCT_UNAVAILABLE,
-        "Product is unavailable",
-      );
+      throw createAppError(Errors.PRODUCT_UNAVAILABLE);
     }
 
     const existingItems = await this.cartItemRepository.findByCartId(cart.id);
@@ -158,10 +117,7 @@ export class CartService {
       );
 
       if (existingProduct && existingProduct.store_id !== product.store_id) {
-        throw new CartServiceError(
-          CartErrorCode.MULTIPLE_STORES,
-          "A cart cannot contain products from multiple stores",
-        );
+        throw createAppError(Errors.MULTIPLE_STORES_IN_CART);
       }
     }
 
@@ -196,10 +152,7 @@ export class CartService {
       }
 
       if (!item) {
-        throw new CartServiceError(
-          CartErrorCode.ITEM_NOT_FOUND,
-          "Unable to create or update cart item",
-        );
+        throw createAppError(Errors.CART_ITEM_NOT_FOUND);
       }
 
       await transactionEventRepository.create({
@@ -230,28 +183,19 @@ export class CartService {
     const cart = await this.cartRepository.findBySessionId(sessionId);
 
     if (!cart) {
-      throw new CartServiceError(
-        CartErrorCode.CART_NOT_FOUND,
-        "Cart not found",
-      );
+      throw createAppError(Errors.CART_NOT_FOUND);
     }
 
     const item = await this.cartItemRepository.findById(itemId);
 
     if (!item || item.cart_id !== cart.id) {
-      throw new CartServiceError(
-        CartErrorCode.ITEM_NOT_FOUND,
-        "Cart item not found",
-      );
+      throw createAppError(Errors.CART_ITEM_NOT_FOUND);
     }
 
     const itemProduct = await this.productRepository.findById(item.product_id);
 
     if (!itemProduct) {
-      throw new CartServiceError(
-        CartErrorCode.PRODUCT_NOT_FOUND,
-        "Product not found",
-      );
+      throw createAppError(Errors.PRODUCT_NOT_FOUND);
     }
 
     const previousQuantity = item.quantity;
@@ -269,10 +213,7 @@ export class CartService {
       );
 
       if (!updatedItem) {
-        throw new CartServiceError(
-          CartErrorCode.ITEM_NOT_FOUND,
-          "Cart item not found",
-        );
+        throw createAppError(Errors.CART_ITEM_NOT_FOUND);
       }
 
       await transactionEventRepository.create({
@@ -298,28 +239,19 @@ export class CartService {
     const cart = await this.cartRepository.findBySessionId(sessionId);
 
     if (!cart) {
-      throw new CartServiceError(
-        CartErrorCode.CART_NOT_FOUND,
-        "Cart not found",
-      );
+      throw createAppError(Errors.CART_NOT_FOUND);
     }
 
     const item = await this.cartItemRepository.findById(itemId);
 
     if (!item || item.cart_id !== cart.id) {
-      throw new CartServiceError(
-        CartErrorCode.ITEM_NOT_FOUND,
-        "Cart item not found",
-      );
+      throw createAppError(Errors.CART_ITEM_NOT_FOUND);
     }
 
     const itemProduct = await this.productRepository.findById(item.product_id);
 
     if (!itemProduct) {
-      throw new CartServiceError(
-        CartErrorCode.PRODUCT_NOT_FOUND,
-        "Product not found",
-      );
+      throw createAppError(Errors.PRODUCT_NOT_FOUND);
     }
 
     await this.database.transaction(async (trx) => {
@@ -353,11 +285,7 @@ export class CartService {
       !Number.isFinite(quantity) ||
       quantity <= 0
     ) {
-      throw new CartServiceError(
-        CartErrorCode.INVALID_QUANTITY,
-        "Quantity must be a positive integer",
-      );
+      throw createAppError(Errors.INVALID_CART_ITEM_QUANTITY);
     }
   }
 }
-

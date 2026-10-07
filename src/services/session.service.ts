@@ -4,20 +4,8 @@ import {
   type CreateSessionData,
 } from "../database/repositories/session.repository.js";
 
-export enum SessionErrorCode {
-  SESSION_NOT_FOUND = "SESSION_NOT_FOUND",
-  INVALID_EXPIRATION = "INVALID_EXPIRATION",
-}
-
-export class SessionServiceError extends Error {
-  constructor(
-    public readonly code: SessionErrorCode,
-    message: string,
-  ) {
-    super(message);
-    this.name = "SessionServiceError";
-  }
-}
+import { createAppError } from "../common/errors/create-app-error.js";
+import { Errors } from "../common/errors/errors.js";
 
 export class SessionService {
   constructor(
@@ -28,10 +16,7 @@ export class SessionService {
     const session = await this.sessionRepository.findById(id);
 
     if (!session) {
-      throw new SessionServiceError(
-        SessionErrorCode.SESSION_NOT_FOUND,
-        `Session not found: ${id}`,
-      );
+      throw createAppError(Errors.SESSION_NOT_FOUND);
     }
 
     return session;
@@ -84,10 +69,7 @@ export class SessionService {
     });
 
     if (!session) {
-      throw new SessionServiceError(
-        SessionErrorCode.SESSION_NOT_FOUND,
-        `Session not found: ${id}`,
-      );
+      throw createAppError(Errors.SESSION_NOT_FOUND);
     }
 
     return session;
@@ -99,10 +81,7 @@ export class SessionService {
     const deletedCount = await this.sessionRepository.delete(id);
 
     if (deletedCount === 0) {
-      throw new SessionServiceError(
-        SessionErrorCode.SESSION_NOT_FOUND,
-        `Session not found: ${id}`,
-      );
+      throw createAppError(Errors.SESSION_NOT_FOUND);
     }
   }
 
@@ -112,10 +91,7 @@ export class SessionService {
       Number.isNaN(expiresAt.getTime()) ||
       expiresAt.getTime() <= Date.now()
     ) {
-      throw new SessionServiceError(
-        SessionErrorCode.INVALID_EXPIRATION,
-        "Session expiration must be a valid future date",
-      );
+      throw createAppError(Errors.INVALID_SESSION_EXPIRATION);
     }
   }
 }

@@ -4,19 +4,34 @@ export const Errors = {
         message: "Session not found",
         statusCode: 404,
     },
-    SESSION_EXPIRED: {
-        code: "SESSION_EXPIRED",
-        message: "Session has expired",
-        statusCode: 401,
+    CATEGORY_INACTIVE: {
+        code: "CATEGORY_INACTIVE",
+        message: "Category is inactive",
+        statusCode: 409,
     },
     CART_NOT_FOUND: {
         code: "CART_NOT_FOUND",
         message: "Cart not found",
         statusCode: 404,
     },
+    CART_ITEM_NOT_FOUND: {
+        code: "CART_ITEM_NOT_FOUND",
+        message: "Cart item not found",
+        statusCode: 404,
+    },
     CART_EMPTY: {
         code: "CART_EMPTY",
         message: "Cart is empty",
+        statusCode: 400,
+    },
+    SESSION_EXPIRED: {
+        code: "SESSION_EXPIRED",
+        message: "Session has expired",
+        statusCode: 401,
+    },
+    INVALID_SESSION_EXPIRATION: {
+        code: "INVALID_SESSION_EXPIRATION",
+        message: "Session expiration must be a valid future date",
         statusCode: 400,
     },
     PRODUCT_NOT_FOUND: {
@@ -302,6 +317,21 @@ export const Errors = {
     PRODUCT_IMAGE_INVALID_ORDER: {
         code: "PRODUCT_IMAGE_INVALID_ORDER",
         message: "Invalid product image order",
+        statusCode: 400,
+    },
+    INVALID_REQUEST_BODY: {
+        code: "INVALID_REQUEST_BODY",
+        message: "Request body is invalid",
+        statusCode: 400,
+    },
+    INVALID_REQUEST_PARAMS: {
+        code: "INVALID_REQUEST_PARAMS",
+        message: "Request parameters are invalid",
+        statusCode: 400,
+    },
+    INVALID_REQUEST_QUERY: {
+        code: "INVALID_REQUEST_QUERY",
+        message: "Request query parameters are invalid",
         statusCode: 400,
     },
 };

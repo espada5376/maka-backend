@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { AppError } from "../common/errors/app-error.js";
+import { createAppError } from "../common/errors/create-app-error.js";
 import { Errors } from "../common/errors/errors.js";
 const MAX_IMAGES_PER_PRODUCT = 4;
 export class ProductImageService {
@@ -20,7 +20,7 @@ export class ProductImageService {
     async getById(id) {
         const image = await this.productImageRepository.findById(id);
         if (!image) {
-            throw new AppError(Errors.PRODUCT_IMAGE_NOT_FOUND.code, Errors.PRODUCT_IMAGE_NOT_FOUND.message, Errors.PRODUCT_IMAGE_NOT_FOUND.statusCode);
+            throw createAppError(Errors.PRODUCT_IMAGE_NOT_FOUND);
         }
         return this.toResponse(image);
     }
@@ -32,18 +32,18 @@ export class ProductImageService {
     async create(data) {
         const productId = this.normalizeProductId(data.product_id);
         await this.assertProductOwnership(productId, data.sessionId);
-        if (!Buffer.isBuffer(data.data) ||
-            data.data.length === 0) {
-            throw new AppError(Errors.PRODUCT_IMAGE_INVALID.code, "Image data must be a non-empty Buffer", Errors.PRODUCT_IMAGE_INVALID.statusCode);
+        if (!Buffer.isBuffer(data.data) || data.data.length === 0) {
+            throw createAppError(Errors.PRODUCT_IMAGE_INVALID);
         }
-        if (typeof data.contentType !== "string" ||
-            !data.contentType.trim()) {
-            throw new AppError(Errors.PRODUCT_IMAGE_INVALID.code, "Image content type is required", Errors.PRODUCT_IMAGE_INVALID.statusCode);
+        if (typeof data.contentType !== "string" || !data.contentType.trim()) {
+            throw createAppError(Errors.PRODUCT_IMAGE_INVALID);
+        }
+        if (typeof data.contentType !== "string" || !data.contentType.trim()) {
+            throw createAppError(Errors.PRODUCT_IMAGE_INVALID);
         }
         const existingImages = await this.productImageRepository.findByProductId(productId);
-        if (existingImages.length >=
-            MAX_IMAGES_PER_PRODUCT) {
-            throw new AppError(Errors.PRODUCT_IMAGE_MAX_REACHED.code, Errors.PRODUCT_IMAGE_MAX_REACHED.message, Errors.PRODUCT_IMAGE_MAX_REACHED.statusCode);
+        if (existingImages.length >= MAX_IMAGES_PER_PRODUCT) {
+            throw createAppError(Errors.PRODUCT_IMAGE_MAX_REACHED);
         }
         const position = existingImages.length;
         const processedImage = await this.imageProcessor.process(data.data, data.contentType);
@@ -68,51 +68,49 @@ export class ProductImageService {
     async update(id, data) {
         const image = await this.productImageRepository.findById(id);
         if (!image) {
-            throw new AppError(Errors.PRODUCT_IMAGE_NOT_FOUND.code, Errors.PRODUCT_IMAGE_NOT_FOUND.message, Errors.PRODUCT_IMAGE_NOT_FOUND.statusCode);
+            throw createAppError(Errors.PRODUCT_IMAGE_NOT_FOUND);
         }
         await this.assertProductOwnership(image.product_id, data.sessionId);
         const updateData = {};
         if (data.position !== undefined) {
-            updateData.position =
-                this.validatePosition(data.position);
+            updateData.position = this.validatePosition(data.position);
         }
         const updatedImage = await this.productImageRepository.update(id, updateData);
         if (!updatedImage) {
-            throw new AppError(Errors.PRODUCT_IMAGE_NOT_FOUND.code, Errors.PRODUCT_IMAGE_NOT_FOUND.message, Errors.PRODUCT_IMAGE_NOT_FOUND.statusCode);
+            throw createAppError(Errors.PRODUCT_IMAGE_NOT_FOUND);
         }
         return this.toResponse(updatedImage);
     }
     async delete(id, sessionId) {
         const image = await this.productImageRepository.findById(id);
         if (!image) {
-            throw new AppError(Errors.PRODUCT_IMAGE_NOT_FOUND.code, Errors.PRODUCT_IMAGE_NOT_FOUND.message, Errors.PRODUCT_IMAGE_NOT_FOUND.statusCode);
+            throw createAppError(Errors.PRODUCT_IMAGE_NOT_FOUND);
         }
         await this.assertProductOwnership(image.product_id, sessionId);
         await this.imageStorage.delete(image.storage_key);
         const deletedCount = await this.productImageRepository.delete(id);
         if (deletedCount === 0) {
-            throw new AppError(Errors.PRODUCT_IMAGE_NOT_FOUND.code, Errors.PRODUCT_IMAGE_NOT_FOUND.message, Errors.PRODUCT_IMAGE_NOT_FOUND.statusCode);
+            throw createAppError(Errors.PRODUCT_IMAGE_NOT_FOUND);
         }
     }
     async reorder(productId, sessionId, imageIds) {
         const normalizedProductId = this.normalizeProductId(productId);
         await this.assertProductOwnership(normalizedProductId, sessionId);
-        if (!Array.isArray(imageIds) ||
-            imageIds.length === 0) {
-            throw new AppError(Errors.PRODUCT_IMAGE_INVALID_ORDER.code, Errors.PRODUCT_IMAGE_INVALID_ORDER.message, Errors.PRODUCT_IMAGE_INVALID_ORDER.statusCode);
+        if (!Array.isArray(imageIds) || imageIds.length === 0) {
+            throw createAppError(Errors.PRODUCT_IMAGE_INVALID_ORDER);
         }
         const hasDuplicates = new Set(imageIds).size !== imageIds.length;
         if (hasDuplicates) {
-            throw new AppError(Errors.PRODUCT_IMAGE_INVALID_ORDER.code, "Image order cannot contain duplicates", Errors.PRODUCT_IMAGE_INVALID_ORDER.statusCode);
+            throw createAppError(Errors.PRODUCT_IMAGE_INVALID_ORDER);
         }
         const images = await this.productImageRepository.findByProductId(normalizedProductId);
         if (images.length !== imageIds.length) {
-            throw new AppError(Errors.PRODUCT_IMAGE_INVALID_ORDER.code, "Image order must contain all product images", Errors.PRODUCT_IMAGE_INVALID_ORDER.statusCode);
+            throw createAppError(Errors.PRODUCT_IMAGE_INVALID_ORDER);
         }
         const existingIds = new Set(images.map((image) => image.id));
         for (const imageId of imageIds) {
             if (!existingIds.has(imageId)) {
-                throw new AppError(Errors.PRODUCT_IMAGE_INVALID_ORDER.code, `Image does not belong to product: ${imageId}`, Errors.PRODUCT_IMAGE_INVALID_ORDER.statusCode);
+                throw createAppError(Errors.PRODUCT_IMAGE_INVALID_ORDER);
             }
         }
         const updates = imageIds.map((imageId, position) => ({
@@ -137,24 +135,24 @@ export class ProductImageService {
     async assertProductOwnership(productId, sessionId) {
         const session = await this.sessionRepository.findById(sessionId);
         if (!session) {
-            throw new AppError(Errors.SESSION_NOT_FOUND.code, Errors.SESSION_NOT_FOUND.message, Errors.SESSION_NOT_FOUND.statusCode);
+            throw createAppError(Errors.SESSION_NOT_FOUND);
         }
         if (session.expires_at <= new Date()) {
-            throw new AppError(Errors.SESSION_EXPIRED.code, Errors.SESSION_EXPIRED.message, Errors.SESSION_EXPIRED.statusCode);
+            throw createAppError(Errors.SESSION_EXPIRED);
         }
         if (!session.user_id) {
-            throw new AppError(Errors.PRODUCT_FORBIDDEN.code, Errors.PRODUCT_FORBIDDEN.message, Errors.PRODUCT_FORBIDDEN.statusCode);
+            throw createAppError(Errors.PRODUCT_FORBIDDEN);
         }
         const product = await this.productRepository.findById(productId);
         if (!product) {
-            throw new AppError(Errors.PRODUCT_NOT_FOUND.code, Errors.PRODUCT_NOT_FOUND.message, Errors.PRODUCT_NOT_FOUND.statusCode);
+            throw createAppError(Errors.PRODUCT_NOT_FOUND);
         }
         const store = await this.storeRepository.findById(product.store_id);
         if (!store) {
-            throw new AppError(Errors.STORE_NOT_FOUND.code, Errors.STORE_NOT_FOUND.message, Errors.STORE_NOT_FOUND.statusCode);
+            throw createAppError(Errors.STORE_NOT_FOUND);
         }
         if (store.owner_id !== session.user_id) {
-            throw new AppError(Errors.PRODUCT_FORBIDDEN.code, Errors.PRODUCT_FORBIDDEN.message, Errors.PRODUCT_FORBIDDEN.statusCode);
+            throw createAppError(Errors.PRODUCT_FORBIDDEN);
         }
     }
     toResponse(image) {
@@ -175,16 +173,14 @@ export class ProductImageService {
         }
     }
     normalizeProductId(productId) {
-        if (typeof productId !== "string" ||
-            !productId.trim()) {
-            throw new AppError(Errors.PRODUCT_IMAGE_INVALID.code, "Product ID is required", Errors.PRODUCT_IMAGE_INVALID.statusCode);
+        if (typeof productId !== "string" || !productId.trim()) {
+            throw createAppError(Errors.PRODUCT_IMAGE_INVALID);
         }
         return productId.trim();
     }
     validatePosition(position) {
-        if (!Number.isInteger(position) ||
-            position < 0) {
-            throw new AppError(Errors.PRODUCT_IMAGE_INVALID_POSITION.code, Errors.PRODUCT_IMAGE_INVALID_POSITION.message, Errors.PRODUCT_IMAGE_INVALID_POSITION.statusCode);
+        if (!Number.isInteger(position) || position < 0) {
+            throw createAppError(Errors.PRODUCT_IMAGE_INVALID_POSITION);
         }
         return position;
     }

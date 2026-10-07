@@ -1,7 +1,7 @@
 import { Router } from "express";
 
-import { uploadImage } from "../common/middlewares/upload-image.middleware.js";
-import { ProductImageController } from "../controllers/product-image.controller.js";
+import { uploadImage } from "../../middlewares/upload-image.middleware.js";
+import { ProductImageController } from "../../../controllers/product-image.controller.js";
 
 export function createProductImageRouter(
   productImageController: ProductImageController,

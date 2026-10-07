@@ -32,17 +32,17 @@ export class OtpService {
     private readonly userRepository: UserRepository = new UserRepository(),
     private readonly sessionRepository: SessionRepository = new SessionRepository(),
     private readonly phoneService: PhoneService = new PhoneService(),
-
-
   ) {}
 
   async requestOtp(sessionId: string, phone: string): Promise<OtpVerification> {
-
     const normalizedPhone = this.phoneService.normalize(phone);
 
     return this.database.transaction(async (trx) => {
-
-      await this.otpRepository.invalidateActive(sessionId, normalizedPhone, trx);
+      await this.otpRepository.invalidateActive(
+        sessionId,
+        normalizedPhone,
+        trx,
+      );
 
       const code = this.generateCode();
 
@@ -74,15 +74,14 @@ export class OtpService {
   }
 
   async verifyOtp(
-  sessionId: string,
-  phone: string,
-  code: string,
-): Promise<{
-  user: User;
-  otp: OtpVerification;
-}> {
-
-     const normalizedPhone = this.phoneService.normalize(phone);
+    sessionId: string,
+    phone: string,
+    code: string,
+  ): Promise<{
+    user: User;
+    otp: OtpVerification;
+  }> {
+    const normalizedPhone = this.phoneService.normalize(phone);
 
     const result = await this.database.transaction(async (trx) => {
       const otp = await this.otpRepository.findLatestPendingForUpdate(
@@ -164,8 +163,8 @@ export class OtpService {
       );
 
       if (!updatedSession) {
-  throw createAppError(Errors.SESSION_NOT_FOUND);
-}
+        throw createAppError(Errors.SESSION_NOT_FOUND);
+      }
 
       const consumed = await this.otpRepository.consume(otp.id, trx);
 
@@ -174,29 +173,29 @@ export class OtpService {
       }
 
       return {
-  type: "success" as const,
-  user: verifiedUser,
-  otp: consumed,
-};
+        type: "success" as const,
+        user: verifiedUser,
+        otp: consumed,
+      };
     });
 
     if (result.type === "not_found") {
-  throw createAppError(Errors.OTP_NOT_FOUND);
-}
+      throw createAppError(Errors.OTP_NOT_FOUND);
+    }
 
-if (result.type === "expired") {
-  throw createAppError(Errors.OTP_EXPIRED);
-}
+    if (result.type === "expired") {
+      throw createAppError(Errors.OTP_EXPIRED);
+    }
 
-if (result.type === "max_attempts") {
-  throw createAppError(Errors.OTP_MAX_ATTEMPTS);
-}
+    if (result.type === "max_attempts") {
+      throw createAppError(Errors.OTP_MAX_ATTEMPTS);
+    }
 
-if (result.type === "invalid") {
-  throw createAppError(Errors.OTP_INVALID);
-}
+    if (result.type === "invalid") {
+      throw createAppError(Errors.OTP_INVALID);
+    }
 
-return result;
+    return result;
   }
 
   private generateCode(): string {

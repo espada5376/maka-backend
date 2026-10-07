@@ -1,11 +1,10 @@
-
 import { describe, expect, it, beforeEach, vi } from "vitest";
 
-import {
-  SessionService,
-  SessionServiceError,
-  SessionErrorCode,
-} from "../../src/services/session.service.js";
+import { SessionService } from "../../src/services/session.service.js";
+
+import { Errors } from "../../src/common/errors/errors.js";
+
+import { expectAppError } from "../helpers/expect-app-error.js";
 
 describe("SessionService", () => {
   const sessionRepository = {
@@ -44,9 +43,9 @@ describe("SessionService", () => {
     it("should throw when the session does not exist", async () => {
       sessionRepository.findById.mockResolvedValue(undefined);
 
-      await expect(sessionService.getById("unknown")).rejects.toMatchObject({
-        code: SessionErrorCode.SESSION_NOT_FOUND,
-      });
+      await expect(sessionService.getById("unknown")).rejects.toMatchObject(
+        expectAppError(Errors.SESSION_NOT_FOUND),
+      );
     });
 
     it("should propagate repository errors", async () => {
@@ -72,9 +71,9 @@ describe("SessionService", () => {
 
       sessionRepository.findByUserId.mockResolvedValue(sessions);
 
-      await expect(
-        sessionService.getByUserId("user-1"),
-      ).resolves.toEqual(sessions);
+      await expect(sessionService.getByUserId("user-1")).resolves.toEqual(
+        sessions,
+      );
 
       expect(sessionRepository.findByUserId).toHaveBeenCalledWith("user-1");
     });
@@ -154,9 +153,9 @@ describe("SessionService", () => {
           user_id: "user-1",
           expires_at: new Date("invalid"),
         }),
-      ).rejects.toMatchObject({
-        code: SessionErrorCode.INVALID_EXPIRATION,
-      });
+      ).rejects.toMatchObject(
+        expectAppError(Errors.INVALID_SESSION_EXPIRATION),
+      );
 
       expect(sessionRepository.create).not.toHaveBeenCalled();
     });
@@ -169,9 +168,9 @@ describe("SessionService", () => {
           user_id: "user-1",
           expires_at: expiresAt,
         }),
-      ).rejects.toMatchObject({
-        code: SessionErrorCode.INVALID_EXPIRATION,
-      });
+      ).rejects.toMatchObject(
+        expectAppError(Errors.INVALID_SESSION_EXPIRATION),
+      );
 
       expect(sessionRepository.create).not.toHaveBeenCalled();
     });
@@ -235,63 +234,63 @@ describe("SessionService", () => {
     });
   });
 
-describe("getValidById", () => {
-  it("should return the session when it exists and is not expired", async () => {
-    const session = {
-      id: "session-1",
-      user_id: "user-1",
-      expires_at: new Date(Date.now() + 60_000),
-      created_at: new Date(),
-      last_seen_at: new Date(),
-    };
+  describe("getValidById", () => {
+    it("should return the session when it exists and is not expired", async () => {
+      const session = {
+        id: "session-1",
+        user_id: "user-1",
+        expires_at: new Date(Date.now() + 60_000),
+        created_at: new Date(),
+        last_seen_at: new Date(),
+      };
 
-    sessionRepository.findById.mockResolvedValue(session);
+      sessionRepository.findById.mockResolvedValue(session);
 
-    await expect(
-      sessionService.getValidById("session-1"),
-    ).resolves.toEqual(session);
+      await expect(sessionService.getValidById("session-1")).resolves.toEqual(
+        session,
+      );
 
-    expect(sessionRepository.findById).toHaveBeenCalledWith("session-1");
+      expect(sessionRepository.findById).toHaveBeenCalledWith("session-1");
+    });
+
+    it("should return undefined when the session does not exist", async () => {
+      sessionRepository.findById.mockResolvedValue(undefined);
+
+      await expect(
+        sessionService.getValidById("unknown"),
+      ).resolves.toBeUndefined();
+
+      expect(sessionRepository.findById).toHaveBeenCalledWith("unknown");
+    });
+
+    it("should return undefined when the session is expired", async () => {
+      const session = {
+        id: "session-1",
+        user_id: "user-1",
+        expires_at: new Date(Date.now() - 1_000),
+        created_at: new Date(),
+        last_seen_at: new Date(),
+      };
+
+      sessionRepository.findById.mockResolvedValue(session);
+
+      await expect(
+        sessionService.getValidById("session-1"),
+      ).resolves.toBeUndefined();
+
+      expect(sessionRepository.findById).toHaveBeenCalledWith("session-1");
+    });
+
+    it("should propagate repository errors", async () => {
+      const error = new Error("database error");
+
+      sessionRepository.findById.mockRejectedValue(error);
+
+      await expect(sessionService.getValidById("session-1")).rejects.toThrow(
+        error,
+      );
+    });
   });
-
-  it("should return undefined when the session does not exist", async () => {
-    sessionRepository.findById.mockResolvedValue(undefined);
-
-    await expect(
-      sessionService.getValidById("unknown"),
-    ).resolves.toBeUndefined();
-
-    expect(sessionRepository.findById).toHaveBeenCalledWith("unknown");
-  });
-
-  it("should return undefined when the session is expired", async () => {
-    const session = {
-      id: "session-1",
-      user_id: "user-1",
-      expires_at: new Date(Date.now() - 1_000),
-      created_at: new Date(),
-      last_seen_at: new Date(),
-    };
-
-    sessionRepository.findById.mockResolvedValue(session);
-
-    await expect(
-      sessionService.getValidById("session-1"),
-    ).resolves.toBeUndefined();
-
-    expect(sessionRepository.findById).toHaveBeenCalledWith("session-1");
-  });
-
-  it("should propagate repository errors", async () => {
-    const error = new Error("database error");
-
-    sessionRepository.findById.mockRejectedValue(error);
-
-    await expect(
-      sessionService.getValidById("session-1"),
-    ).rejects.toThrow(error);
-  });
-});
 
   describe("updateExpiration", () => {
     it("should update the session expiration", async () => {
@@ -324,13 +323,10 @@ describe("getValidById", () => {
 
     it("should reject an invalid expiration date", async () => {
       await expect(
-        sessionService.updateExpiration(
-          "session-1",
-          new Date("invalid"),
-        ),
-      ).rejects.toMatchObject({
-        code: SessionErrorCode.INVALID_EXPIRATION,
-      });
+        sessionService.updateExpiration("session-1", new Date("invalid")),
+      ).rejects.toMatchObject(
+        expectAppError(Errors.INVALID_SESSION_EXPIRATION),
+      );
 
       expect(sessionRepository.findById).not.toHaveBeenCalled();
       expect(sessionRepository.update).not.toHaveBeenCalled();
@@ -342,9 +338,9 @@ describe("getValidById", () => {
           "session-1",
           new Date(Date.now() - 1000),
         ),
-      ).rejects.toMatchObject({
-        code: SessionErrorCode.INVALID_EXPIRATION,
-      });
+      ).rejects.toMatchObject(
+        expectAppError(Errors.INVALID_SESSION_EXPIRATION),
+      );
 
       expect(sessionRepository.findById).not.toHaveBeenCalled();
       expect(sessionRepository.update).not.toHaveBeenCalled();
@@ -358,9 +354,7 @@ describe("getValidById", () => {
           "session-1",
           new Date("2030-01-01T00:00:00Z"),
         ),
-      ).rejects.toMatchObject({
-        code: SessionErrorCode.SESSION_NOT_FOUND,
-      });
+      ).rejects.toMatchObject(expectAppError(Errors.SESSION_NOT_FOUND));
 
       expect(sessionRepository.update).not.toHaveBeenCalled();
     });
@@ -407,11 +401,9 @@ describe("getValidById", () => {
     it("should throw when the session does not exist", async () => {
       sessionRepository.findById.mockResolvedValue(undefined);
 
-      await expect(
-        sessionService.delete("unknown"),
-      ).rejects.toMatchObject({
-        code: SessionErrorCode.SESSION_NOT_FOUND,
-      });
+      await expect(sessionService.delete("unknown")).rejects.toMatchObject(
+        expectAppError(Errors.SESSION_NOT_FOUND),
+      );
 
       expect(sessionRepository.delete).not.toHaveBeenCalled();
     });
@@ -427,11 +419,9 @@ describe("getValidById", () => {
 
       sessionRepository.delete.mockResolvedValue(0);
 
-      await expect(
-        sessionService.delete("session-1"),
-      ).rejects.toMatchObject({
-        code: SessionErrorCode.SESSION_NOT_FOUND,
-      });
+      await expect(sessionService.delete("session-1")).rejects.toMatchObject(
+        expectAppError(Errors.SESSION_NOT_FOUND),
+      );
     });
 
     it("should propagate repository errors", async () => {
@@ -450,19 +440,4 @@ describe("getValidById", () => {
       await expect(sessionService.delete("session-1")).rejects.toThrow(error);
     });
   });
-
-  describe("SessionServiceError", () => {
-    it("should expose a SessionServiceError-compatible error type", () => {
-      const error = new SessionServiceError(
-        SessionErrorCode.SESSION_NOT_FOUND,
-        "Session not found",
-      );
-
-      expect(error).toBeInstanceOf(Error);
-      expect(error).toBeInstanceOf(SessionServiceError);
-      expect(error.code).toBe(SessionErrorCode.SESSION_NOT_FOUND);
-      expect(error.name).toBe("SessionServiceError");
-    });
-  });
 });
-

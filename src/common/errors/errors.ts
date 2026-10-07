@@ -5,10 +5,10 @@ export const Errors = {
     statusCode: 404,
   },
 
-  SESSION_EXPIRED: {
-    code: "SESSION_EXPIRED",
-    message: "Session has expired",
-    statusCode: 401,
+  CATEGORY_INACTIVE: {
+    code: "CATEGORY_INACTIVE",
+    message: "Category is inactive",
+    statusCode: 409,
   },
 
   CART_NOT_FOUND: {
@@ -17,9 +17,27 @@ export const Errors = {
     statusCode: 404,
   },
 
+  CART_ITEM_NOT_FOUND: {
+    code: "CART_ITEM_NOT_FOUND",
+    message: "Cart item not found",
+    statusCode: 404,
+  },
+
   CART_EMPTY: {
     code: "CART_EMPTY",
     message: "Cart is empty",
+    statusCode: 400,
+  },
+
+  SESSION_EXPIRED: {
+    code: "SESSION_EXPIRED",
+    message: "Session has expired",
+    statusCode: 401,
+  },
+
+  INVALID_SESSION_EXPIRATION: {
+    code: "INVALID_SESSION_EXPIRATION",
+    message: "Session expiration must be a valid future date",
     statusCode: 400,
   },
 
@@ -124,60 +142,59 @@ export const Errors = {
     statusCode: 400,
   },
 
-CATEGORY_NOT_FOUND: {
-  code: "CATEGORY_NOT_FOUND",
-  message: "category not found",
-  statusCode: 404,
-},
-
+  CATEGORY_NOT_FOUND: {
+    code: "CATEGORY_NOT_FOUND",
+    message: "category not found",
+    statusCode: 404,
+  },
 
   CATEGORY_INVALID_NAME: {
-  code: "CATEGORY_INVALID_NAME",
-  message: "Invalid category name",
-  statusCode: 400,
-},
+    code: "CATEGORY_INVALID_NAME",
+    message: "Invalid category name",
+    statusCode: 400,
+  },
 
-CATEGORY_INVALID_SLUG: {
-  code: "CATEGORY_INVALID_SLUG",
-  message: "Invalid category slug",
-  statusCode: 400,
-},
+  CATEGORY_INVALID_SLUG: {
+    code: "CATEGORY_INVALID_SLUG",
+    message: "Invalid category slug",
+    statusCode: 400,
+  },
 
-CATEGORY_SLUG_ALREADY_EXISTS: {
-  code: "CATEGORY_SLUG_ALREADY_EXISTS",
-  message: "Category slug already exists",
-  statusCode: 409,
-},
+  CATEGORY_SLUG_ALREADY_EXISTS: {
+    code: "CATEGORY_SLUG_ALREADY_EXISTS",
+    message: "Category slug already exists",
+    statusCode: 409,
+  },
 
-CATEGORY_PARENT_NOT_FOUND: {
-  code: "CATEGORY_PARENT_NOT_FOUND",
-  message: "Parent category not found",
-  statusCode: 404,
-},
+  CATEGORY_PARENT_NOT_FOUND: {
+    code: "CATEGORY_PARENT_NOT_FOUND",
+    message: "Parent category not found",
+    statusCode: 404,
+  },
 
-CATEGORY_PARENT_INACTIVE: {
-  code: "CATEGORY_PARENT_INACTIVE",
-  message: "Parent category is inactive",
-  statusCode: 400,
-},
+  CATEGORY_PARENT_INACTIVE: {
+    code: "CATEGORY_PARENT_INACTIVE",
+    message: "Parent category is inactive",
+    statusCode: 400,
+  },
 
-CATEGORY_INVALID_PARENT: {
-  code: "CATEGORY_INVALID_PARENT",
-  message: "Invalid category parent",
-  statusCode: 400,
-},
+  CATEGORY_INVALID_PARENT: {
+    code: "CATEGORY_INVALID_PARENT",
+    message: "Invalid category parent",
+    statusCode: 400,
+  },
 
-CATEGORY_MAX_DEPTH_REACHED: {
-  code: "CATEGORY_MAX_DEPTH_REACHED",
-  message: "Category hierarchy cannot exceed two levels",
-  statusCode: 400,
-},
+  CATEGORY_MAX_DEPTH_REACHED: {
+    code: "CATEGORY_MAX_DEPTH_REACHED",
+    message: "Category hierarchy cannot exceed two levels",
+    statusCode: 400,
+  },
 
-CATEGORY_INVALID_STATUS: {
-  code: "CATEGORY_INVALID_STATUS",
-  message: "Invalid category status",
-  statusCode: 400,
-},
+  CATEGORY_INVALID_STATUS: {
+    code: "CATEGORY_INVALID_STATUS",
+    message: "Invalid category status",
+    statusCode: 400,
+  },
 
   PRODUCT_FORBIDDEN: {
     code: "PRODUCT_FORBIDDEN",
@@ -282,34 +299,34 @@ CATEGORY_INVALID_STATUS: {
   },
 
   USER_NOT_FOUND: {
-  code: "USER_NOT_FOUND",
-  message: "User not found",
-  statusCode: 404,
-},
+    code: "USER_NOT_FOUND",
+    message: "User not found",
+    statusCode: 404,
+  },
 
-INVALID_NAME: {
-  code: "INVALID_NAME",
-  message: "Invalid user name",
-  statusCode: 400,
-},
+  INVALID_NAME: {
+    code: "INVALID_NAME",
+    message: "Invalid user name",
+    statusCode: 400,
+  },
 
-INVALID_PHONE: {
-  code: "INVALID_PHONE",
-  message: "Invalid phone number",
-  statusCode: 400,
-},
+  INVALID_PHONE: {
+    code: "INVALID_PHONE",
+    message: "Invalid phone number",
+    statusCode: 400,
+  },
 
-PHONE_ALREADY_EXISTS: {
-  code: "PHONE_ALREADY_EXISTS",
-  message: "A user already exists with this phone number",
-  statusCode: 409,
-},
+  PHONE_ALREADY_EXISTS: {
+    code: "PHONE_ALREADY_EXISTS",
+    message: "A user already exists with this phone number",
+    statusCode: 409,
+  },
 
-INVALID_USER_STATUS: {
-  code: "INVALID_USER_STATUS",
-  message: "Invalid user status",
-  statusCode: 400,
-},
+  INVALID_USER_STATUS: {
+    code: "INVALID_USER_STATUS",
+    message: "Invalid user status",
+    statusCode: 400,
+  },
 
   OTP_NOT_FOUND: {
     code: "OTP_NOT_FOUND",
@@ -335,7 +352,7 @@ INVALID_USER_STATUS: {
     statusCode: 429,
   },
 
-    PRODUCT_IMAGE_NOT_FOUND: {
+  PRODUCT_IMAGE_NOT_FOUND: {
     code: "PRODUCT_IMAGE_NOT_FOUND",
     message: "Product image not found",
     statusCode: 404,
@@ -365,7 +382,21 @@ INVALID_USER_STATUS: {
     statusCode: 400,
   },
 
-  
+  INVALID_REQUEST_BODY: {
+    code: "INVALID_REQUEST_BODY",
+    message: "Request body is invalid",
+    statusCode: 400,
+  },
 
+  INVALID_REQUEST_PARAMS: {
+    code: "INVALID_REQUEST_PARAMS",
+    message: "Request parameters are invalid",
+    statusCode: 400,
+  },
 
+  INVALID_REQUEST_QUERY: {
+    code: "INVALID_REQUEST_QUERY",
+    message: "Request query parameters are invalid",
+    statusCode: 400,
+  },
 } as const;

@@ -1,9 +1,6 @@
 export async function up(knex) {
     await knex.schema.createTable("product_images", (table) => {
-        table
-            .uuid("id")
-            .primary()
-            .defaultTo(knex.raw("gen_random_uuid()"));
+        table.uuid("id").primary().defaultTo(knex.raw("gen_random_uuid()"));
         table
             .uuid("product_id")
             .notNullable()

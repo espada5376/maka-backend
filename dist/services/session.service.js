@@ -1,17 +1,6 @@
 import { SessionRepository, } from "../database/repositories/session.repository.js";
-export var SessionErrorCode;
-(function (SessionErrorCode) {
-    SessionErrorCode["SESSION_NOT_FOUND"] = "SESSION_NOT_FOUND";
-    SessionErrorCode["INVALID_EXPIRATION"] = "INVALID_EXPIRATION";
-})(SessionErrorCode || (SessionErrorCode = {}));
-export class SessionServiceError extends Error {
-    code;
-    constructor(code, message) {
-        super(message);
-        this.code = code;
-        this.name = "SessionServiceError";
-    }
-}
+import { createAppError } from "../common/errors/create-app-error.js";
+import { Errors } from "../common/errors/errors.js";
 export class SessionService {
     sessionRepository;
     constructor(sessionRepository = new SessionRepository()) {
@@ -20,7 +9,7 @@ export class SessionService {
     async getById(id) {
         const session = await this.sessionRepository.findById(id);
         if (!session) {
-            throw new SessionServiceError(SessionErrorCode.SESSION_NOT_FOUND, `Session not found: ${id}`);
+            throw createAppError(Errors.SESSION_NOT_FOUND);
         }
         return session;
     }
@@ -58,7 +47,7 @@ export class SessionService {
             expires_at: expiresAt,
         });
         if (!session) {
-            throw new SessionServiceError(SessionErrorCode.SESSION_NOT_FOUND, `Session not found: ${id}`);
+            throw createAppError(Errors.SESSION_NOT_FOUND);
         }
         return session;
     }
@@ -66,14 +55,14 @@ export class SessionService {
         await this.getById(id);
         const deletedCount = await this.sessionRepository.delete(id);
         if (deletedCount === 0) {
-            throw new SessionServiceError(SessionErrorCode.SESSION_NOT_FOUND, `Session not found: ${id}`);
+            throw createAppError(Errors.SESSION_NOT_FOUND);
         }
     }
     validateExpiration(expiresAt) {
         if (!(expiresAt instanceof Date) ||
             Number.isNaN(expiresAt.getTime()) ||
             expiresAt.getTime() <= Date.now()) {
-            throw new SessionServiceError(SessionErrorCode.INVALID_EXPIRATION, "Session expiration must be a valid future date");
+            throw createAppError(Errors.INVALID_SESSION_EXPIRATION);
         }
     }
 }
