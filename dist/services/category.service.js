@@ -1,22 +1,5 @@
-export const CategoryErrorCode = {
-    CATEGORY_NOT_FOUND: "CATEGORY_NOT_FOUND",
-    PARENT_CATEGORY_NOT_FOUND: "PARENT_CATEGORY_NOT_FOUND",
-    PARENT_CATEGORY_INACTIVE: "PARENT_CATEGORY_INACTIVE",
-    INVALID_NAME: "INVALID_NAME",
-    INVALID_SLUG: "INVALID_SLUG",
-    SLUG_ALREADY_EXISTS: "SLUG_ALREADY_EXISTS",
-    INVALID_PARENT: "INVALID_PARENT",
-    MAX_DEPTH_REACHED: "MAX_DEPTH_REACHED",
-    INVALID_STATUS: "INVALID_STATUS",
-};
-export class CategoryServiceError extends Error {
-    code;
-    constructor(code, message) {
-        super(message);
-        this.code = code;
-        this.name = "CategoryServiceError";
-    }
-}
+import { createAppError } from "../common/errors/create-app-error.js";
+import { Errors } from "../common/errors/errors.js";
 export class CategoryService {
     categoryRepository;
     constructor(categoryRepository) {
@@ -25,21 +8,21 @@ export class CategoryService {
     async getById(id) {
         const category = await this.categoryRepository.findById(id);
         if (!category) {
-            throw new CategoryServiceError(CategoryErrorCode.CATEGORY_NOT_FOUND, "Category not found");
+            throw createAppError(Errors.CATEGORY_NOT_FOUND);
         }
         return category;
     }
     async getBySlug(slug) {
         const category = await this.categoryRepository.findBySlug(slug);
         if (!category) {
-            throw new CategoryServiceError(CategoryErrorCode.CATEGORY_NOT_FOUND, "Category not found");
+            throw createAppError(Errors.CATEGORY_NOT_FOUND);
         }
         return category;
     }
     async getChildren(parentId) {
         const parent = await this.categoryRepository.findById(parentId);
         if (!parent) {
-            throw new CategoryServiceError(CategoryErrorCode.CATEGORY_NOT_FOUND, "Category not found");
+            throw createAppError(Errors.CATEGORY_NOT_FOUND);
         }
         return this.categoryRepository.findChildren(parentId);
     }
@@ -51,19 +34,19 @@ export class CategoryService {
         this.validateSlug(data.slug);
         const existingCategory = await this.categoryRepository.findBySlug(data.slug);
         if (existingCategory) {
-            throw new CategoryServiceError(CategoryErrorCode.SLUG_ALREADY_EXISTS, "Category slug already exists");
+            throw createAppError(Errors.CATEGORY_SLUG_ALREADY_EXISTS);
         }
         let parentId = null;
         if (data.parent_id) {
             const parent = await this.categoryRepository.findById(data.parent_id);
             if (!parent) {
-                throw new CategoryServiceError(CategoryErrorCode.PARENT_CATEGORY_NOT_FOUND, "Parent category not found");
+                throw createAppError(Errors.CATEGORY_PARENT_NOT_FOUND);
             }
             if (parent.status !== "active") {
-                throw new CategoryServiceError(CategoryErrorCode.PARENT_CATEGORY_INACTIVE, "Parent category is inactive");
+                throw createAppError(Errors.CATEGORY_PARENT_INACTIVE);
             }
             if (parent.parent_id !== null) {
-                throw new CategoryServiceError(CategoryErrorCode.MAX_DEPTH_REACHED, "Category hierarchy cannot exceed two levels");
+                throw createAppError(Errors.CATEGORY_MAX_DEPTH_REACHED);
             }
             parentId = parent.id;
         }
@@ -76,7 +59,7 @@ export class CategoryService {
     async update(id, data) {
         const category = await this.categoryRepository.findById(id);
         if (!category) {
-            throw new CategoryServiceError(CategoryErrorCode.CATEGORY_NOT_FOUND, "Category not found");
+            throw createAppError(Errors.CATEGORY_NOT_FOUND);
         }
         if (data.name !== undefined) {
             this.validateName(data.name);
@@ -86,7 +69,7 @@ export class CategoryService {
             const existingCategory = await this.categoryRepository.findBySlug(data.slug);
             if (existingCategory &&
                 existingCategory.id !== category.id) {
-                throw new CategoryServiceError(CategoryErrorCode.SLUG_ALREADY_EXISTS, "Category slug already exists");
+                throw createAppError(Errors.CATEGORY_SLUG_ALREADY_EXISTS);
             }
         }
         if (data.status !== undefined) {
@@ -94,18 +77,18 @@ export class CategoryService {
         }
         if (data.parent_id !== undefined) {
             if (data.parent_id === id) {
-                throw new CategoryServiceError(CategoryErrorCode.INVALID_PARENT, "A category cannot be its own parent");
+                throw createAppError(Errors.CATEGORY_INVALID_PARENT);
             }
             if (data.parent_id !== null) {
                 const parent = await this.categoryRepository.findById(data.parent_id);
                 if (!parent) {
-                    throw new CategoryServiceError(CategoryErrorCode.PARENT_CATEGORY_NOT_FOUND, "Parent category not found");
+                    throw createAppError(Errors.CATEGORY_PARENT_NOT_FOUND);
                 }
                 if (parent.status !== "active") {
-                    throw new CategoryServiceError(CategoryErrorCode.PARENT_CATEGORY_INACTIVE, "Parent category is inactive");
+                    throw createAppError(Errors.CATEGORY_PARENT_INACTIVE);
                 }
                 if (parent.parent_id !== null) {
-                    throw new CategoryServiceError(CategoryErrorCode.MAX_DEPTH_REACHED, "Category hierarchy cannot exceed two levels");
+                    throw createAppError(Errors.CATEGORY_MAX_DEPTH_REACHED);
                 }
             }
         }
@@ -114,19 +97,19 @@ export class CategoryService {
     validateName(name) {
         if (typeof name !== "string" ||
             name.trim().length === 0) {
-            throw new CategoryServiceError(CategoryErrorCode.INVALID_NAME, "Category name is required");
+            throw createAppError(Errors.CATEGORY_INVALID_NAME);
         }
     }
     validateSlug(slug) {
         if (typeof slug !== "string" ||
             slug.trim().length === 0) {
-            throw new CategoryServiceError(CategoryErrorCode.INVALID_SLUG, "Category slug is required");
+            throw createAppError(Errors.CATEGORY_INVALID_SLUG);
         }
     }
     validateStatus(status) {
         if (status !== "active" &&
             status !== "inactive") {
-            throw new CategoryServiceError(CategoryErrorCode.INVALID_STATUS, "Invalid category status");
+            throw createAppError(Errors.CATEGORY_INVALID_STATUS);
         }
     }
 }

@@ -1,20 +1,8 @@
-import { AppError } from "../errors/app-error.js";
+import { mapErrorToHttpResponse } from "../http/error-response.js";
 export function errorMiddleware(error, _req, res, _next) {
-    if (error instanceof AppError) {
-        return res.status(error.statusCode).json({
-            success: false,
-            error: {
-                code: error.code,
-                message: error.message,
-            },
-        });
+    const response = mapErrorToHttpResponse(error);
+    if (response.statusCode >= 500) {
+        console.error(error);
     }
-    console.error(error);
-    return res.status(500).json({
-        success: false,
-        error: {
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Internal server error",
-        },
-    });
+    res.status(response.statusCode).json(response.body);
 }

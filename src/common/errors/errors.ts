@@ -124,6 +124,13 @@ export const Errors = {
     statusCode: 400,
   },
 
+CATEGORY_NOT_FOUND: {
+  code: "CATEGORY_NOT_FOUND",
+  message: "category not found",
+  statusCode: 404,
+},
+
+
   CATEGORY_INVALID_NAME: {
   code: "CATEGORY_INVALID_NAME",
   message: "Invalid category name",
@@ -327,6 +334,38 @@ INVALID_USER_STATUS: {
     message: "Maximum OTP attempts exceeded",
     statusCode: 429,
   },
+
+    PRODUCT_IMAGE_NOT_FOUND: {
+    code: "PRODUCT_IMAGE_NOT_FOUND",
+    message: "Product image not found",
+    statusCode: 404,
+  },
+
+  PRODUCT_IMAGE_INVALID: {
+    code: "PRODUCT_IMAGE_INVALID",
+    message: "Invalid product image",
+    statusCode: 400,
+  },
+
+  PRODUCT_IMAGE_INVALID_POSITION: {
+    code: "PRODUCT_IMAGE_INVALID_POSITION",
+    message: "Image position must be a non-negative integer",
+    statusCode: 400,
+  },
+
+  PRODUCT_IMAGE_MAX_REACHED: {
+    code: "PRODUCT_IMAGE_MAX_REACHED",
+    message: "A product cannot have more than 4 images",
+    statusCode: 400,
+  },
+
+  PRODUCT_IMAGE_INVALID_ORDER: {
+    code: "PRODUCT_IMAGE_INVALID_ORDER",
+    message: "Invalid product image order",
+    statusCode: 400,
+  },
+
+  
 
 
 } as const;

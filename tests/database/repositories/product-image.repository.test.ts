@@ -90,17 +90,21 @@ describe("ProductImageRepository", () => {
 
     const image =
       await imageRepository.create({
+        id: crypto.randomUUID(),
         product_id: product.id,
-        url: "https://example.com/image-1.jpg",
+        storage_key:
+          `products/${product.id}/image-1.webp`,
         position: 0,
       });
 
     expect(image).toBeDefined();
+    expect(image.id).toBeDefined();
     expect(image.product_id).toBe(product.id);
-    expect(image.url).toBe(
-      "https://example.com/image-1.jpg",
+    expect(image.storage_key).toBe(
+      `products/${product.id}/image-1.webp`,
     );
     expect(image.position).toBe(0);
+    expect(image.created_at).toBeDefined();
   });
 
   it("should find an image by id", async () => {
@@ -109,8 +113,10 @@ describe("ProductImageRepository", () => {
 
     const created =
       await imageRepository.create({
+        id: crypto.randomUUID(),
         product_id: product.id,
-        url: "https://example.com/image.jpg",
+        storage_key:
+          `products/${product.id}/image.webp`,
         position: 0,
       });
 
@@ -121,6 +127,9 @@ describe("ProductImageRepository", () => {
 
     expect(image).toBeDefined();
     expect(image?.id).toBe(created.id);
+    expect(image?.storage_key).toBe(
+      created.storage_key,
+    );
   });
 
   it("should find product images ordered by position", async () => {
@@ -128,20 +137,26 @@ describe("ProductImageRepository", () => {
       await createTestProduct();
 
     await imageRepository.create({
+      id: crypto.randomUUID(),
       product_id: product.id,
-      url: "https://example.com/image-3.jpg",
+      storage_key:
+        `products/${product.id}/image-3.webp`,
       position: 2,
     });
 
     await imageRepository.create({
+      id: crypto.randomUUID(),
       product_id: product.id,
-      url: "https://example.com/image-1.jpg",
+      storage_key:
+        `products/${product.id}/image-1.webp`,
       position: 0,
     });
 
     await imageRepository.create({
+      id: crypto.randomUUID(),
       product_id: product.id,
-      url: "https://example.com/image-2.jpg",
+      storage_key:
+        `products/${product.id}/image-2.webp`,
       position: 1,
     });
 
@@ -155,6 +170,14 @@ describe("ProductImageRepository", () => {
     expect(
       images.map((image) => image.position),
     ).toEqual([0, 1, 2]);
+
+    expect(
+      images.map((image) => image.storage_key),
+    ).toEqual([
+      `products/${product.id}/image-1.webp`,
+      `products/${product.id}/image-2.webp`,
+      `products/${product.id}/image-3.webp`,
+    ]);
   });
 
   it("should update an image", async () => {
@@ -163,8 +186,10 @@ describe("ProductImageRepository", () => {
 
     const created =
       await imageRepository.create({
+        id: crypto.randomUUID(),
         product_id: product.id,
-        url: "https://example.com/old.jpg",
+        storage_key:
+          `products/${product.id}/old.webp`,
         position: 0,
       });
 
@@ -172,14 +197,14 @@ describe("ProductImageRepository", () => {
       await imageRepository.update(
         created.id,
         {
-          url: "https://example.com/new.jpg",
           position: 1,
         },
       );
 
     expect(updated).toBeDefined();
-    expect(updated?.url).toBe(
-      "https://example.com/new.jpg",
+    expect(updated?.id).toBe(created.id);
+    expect(updated?.storage_key).toBe(
+      created.storage_key,
     );
     expect(updated?.position).toBe(1);
   });
@@ -190,8 +215,10 @@ describe("ProductImageRepository", () => {
 
     const created =
       await imageRepository.create({
+        id: crypto.randomUUID(),
         product_id: product.id,
-        url: "https://example.com/image.jpg",
+        storage_key:
+          `products/${product.id}/image.webp`,
         position: 0,
       });
 
@@ -215,14 +242,18 @@ describe("ProductImageRepository", () => {
       await createTestProduct();
 
     await imageRepository.create({
+      id: crypto.randomUUID(),
       product_id: product.id,
-      url: "https://example.com/image-1.jpg",
+      storage_key:
+        `products/${product.id}/image-1.webp`,
       position: 0,
     });
 
     await imageRepository.create({
+      id: crypto.randomUUID(),
       product_id: product.id,
-      url: "https://example.com/image-2.jpg",
+      storage_key:
+        `products/${product.id}/image-2.webp`,
       position: 1,
     });
 
@@ -241,25 +272,63 @@ describe("ProductImageRepository", () => {
     expect(images).toHaveLength(0);
   });
 
-  it("should reject an image with a negative position", async () => {
+  it("should reject duplicate positions for the same product", async () => {
     const product =
       await createTestProduct();
 
+    await imageRepository.create({
+      id: crypto.randomUUID(),
+      product_id: product.id,
+      storage_key:
+        `products/${product.id}/image-1.webp`,
+      position: 0,
+    });
+
     await expect(
       imageRepository.create({
+        id: crypto.randomUUID(),
         product_id: product.id,
-        url: "https://example.com/image.jpg",
-        position: -1,
+        storage_key:
+          `products/${product.id}/image-2.webp`,
+        position: 0,
       }),
     ).rejects.toThrow();
+  });
+
+  it("should allow the same position for different products", async () => {
+    const product1 =
+      await createTestProduct();
+
+    const product2 =
+      await createTestProduct();
+
+    await imageRepository.create({
+      id: crypto.randomUUID(),
+      product_id: product1.id,
+      storage_key:
+        `products/${product1.id}/image.webp`,
+      position: 0,
+    });
+
+    await expect(
+      imageRepository.create({
+        id: crypto.randomUUID(),
+        product_id: product2.id,
+        storage_key:
+          `products/${product2.id}/image.webp`,
+        position: 0,
+      }),
+    ).resolves.toBeDefined();
   });
 
   it("should reject an image for a nonexistent product", async () => {
     await expect(
       imageRepository.create({
+        id: crypto.randomUUID(),
         product_id:
           "00000000-0000-0000-0000-000000000000",
-        url: "https://example.com/image.jpg",
+        storage_key:
+          "products/nonexistent/image.webp",
         position: 0,
       }),
     ).rejects.toThrow();
@@ -271,8 +340,10 @@ describe("ProductImageRepository", () => {
 
     const image =
       await imageRepository.create({
+        id: crypto.randomUUID(),
         product_id: product.id,
-        url: "https://example.com/image.jpg",
+        storage_key:
+          `products/${product.id}/image.webp`,
         position: 0,
       });
 
@@ -287,4 +358,68 @@ describe("ProductImageRepository", () => {
 
     expect(deletedImage).toBeUndefined();
   });
+
+it("should reorder product images atomically", async () => {
+  const product = await createTestProduct();
+
+  const image1 = await imageRepository.create({
+    id: crypto.randomUUID(),
+    product_id: product.id,
+    storage_key:
+      `products/${product.id}/image-1.webp`,
+    position: 0,
+  });
+
+  const image2 = await imageRepository.create({
+    id: crypto.randomUUID(),
+    product_id: product.id,
+    storage_key:
+      `products/${product.id}/image-2.webp`,
+    position: 1,
+  });
+
+  const image3 = await imageRepository.create({
+    id: crypto.randomUUID(),
+    product_id: product.id,
+    storage_key:
+      `products/${product.id}/image-3.webp`,
+    position: 2,
+  });
+
+  const result =
+    await imageRepository.reorderPositions(
+      product.id,
+      [
+        {
+          id: image3.id,
+          position: 0,
+        },
+        {
+          id: image1.id,
+          position: 1,
+        },
+        {
+          id: image2.id,
+          position: 2,
+        },
+      ],
+    );
+
+  expect(
+    result.map((image) => image.id),
+  ).toEqual([
+    image3.id,
+    image1.id,
+    image2.id,
+  ]);
+
+  expect(
+    result.map((image) => image.position),
+  ).toEqual([
+    0,
+    1,
+    2,
+  ]);
+});
+
 });

@@ -2,8 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   CategoryService,
-  CategoryServiceError,
-  CategoryErrorCode,
 } from "../../src/services/category.service.js";
 
 describe("CategoryService", () => {
@@ -62,7 +60,7 @@ describe("CategoryService", () => {
       mocks.categoryRepository.findById.mockResolvedValue(undefined);
 
       await expect(categoryService.getById("unknown")).rejects.toMatchObject({
-        code: CategoryErrorCode.CATEGORY_NOT_FOUND,
+        code: "CATEGORY_NOT_FOUND",
       });
     });
 
@@ -91,7 +89,7 @@ describe("CategoryService", () => {
       mocks.categoryRepository.findBySlug.mockResolvedValue(undefined);
 
       await expect(categoryService.getBySlug("unknown")).rejects.toMatchObject({
-        code: CategoryErrorCode.CATEGORY_NOT_FOUND,
+        code: "CATEGORY_NOT_FOUND",
       });
     });
 
@@ -125,7 +123,7 @@ describe("CategoryService", () => {
       await expect(
         categoryService.getChildren("unknown"),
       ).rejects.toMatchObject({
-        code: CategoryErrorCode.CATEGORY_NOT_FOUND,
+        code: "CATEGORY_NOT_FOUND",
       });
 
       expect(mocks.categoryRepository.findChildren).not.toHaveBeenCalled();
@@ -203,7 +201,7 @@ describe("CategoryService", () => {
           slug: "beaute",
         }),
       ).rejects.toMatchObject({
-        code: CategoryErrorCode.INVALID_NAME,
+        code: "CATEGORY_INVALID_NAME",
       });
 
       expect(mocks.categoryRepository.create).not.toHaveBeenCalled();
@@ -216,7 +214,7 @@ describe("CategoryService", () => {
           slug: "",
         }),
       ).rejects.toMatchObject({
-        code: CategoryErrorCode.INVALID_SLUG,
+        code: "CATEGORY_INVALID_SLUG",
       });
 
       expect(mocks.categoryRepository.create).not.toHaveBeenCalled();
@@ -231,7 +229,7 @@ describe("CategoryService", () => {
           slug: "beaute",
         }),
       ).rejects.toMatchObject({
-        code: CategoryErrorCode.SLUG_ALREADY_EXISTS,
+        code: "CATEGORY_SLUG_ALREADY_EXISTS",
       });
 
       expect(mocks.categoryRepository.create).not.toHaveBeenCalled();
@@ -249,7 +247,7 @@ describe("CategoryService", () => {
           parent_id: "unknown",
         }),
       ).rejects.toMatchObject({
-        code: CategoryErrorCode.PARENT_CATEGORY_NOT_FOUND,
+        code: "CATEGORY_PARENT_NOT_FOUND",
       });
     });
 
@@ -268,7 +266,7 @@ describe("CategoryService", () => {
           parent_id: "category-1",
         }),
       ).rejects.toMatchObject({
-        code: CategoryErrorCode.PARENT_CATEGORY_INACTIVE,
+        code: "CATEGORY_PARENT_INACTIVE",
       });
     });
   });
@@ -311,7 +309,7 @@ describe("CategoryService", () => {
           name: "Beauté",
         }),
       ).rejects.toMatchObject({
-        code: CategoryErrorCode.CATEGORY_NOT_FOUND,
+        code: "CATEGORY_NOT_FOUND",
       });
 
       expect(mocks.categoryRepository.update).not.toHaveBeenCalled();
@@ -325,7 +323,7 @@ describe("CategoryService", () => {
           name: "",
         }),
       ).rejects.toMatchObject({
-        code: CategoryErrorCode.INVALID_NAME,
+        code: "CATEGORY_INVALID_NAME",
       });
 
       expect(mocks.categoryRepository.update).not.toHaveBeenCalled();
@@ -339,7 +337,7 @@ describe("CategoryService", () => {
           slug: "",
         }),
       ).rejects.toMatchObject({
-        code: CategoryErrorCode.INVALID_SLUG,
+        code: "CATEGORY_INVALID_SLUG",
       });
 
       expect(mocks.categoryRepository.update).not.toHaveBeenCalled();
@@ -358,7 +356,7 @@ describe("CategoryService", () => {
           slug: "nouveau-slug",
         }),
       ).rejects.toMatchObject({
-        code: CategoryErrorCode.SLUG_ALREADY_EXISTS,
+        code: "CATEGORY_SLUG_ALREADY_EXISTS",
       });
     });
 
@@ -386,7 +384,7 @@ describe("CategoryService", () => {
           parent_id: "unknown",
         }),
       ).rejects.toMatchObject({
-        code: CategoryErrorCode.PARENT_CATEGORY_NOT_FOUND,
+        code: "CATEGORY_PARENT_NOT_FOUND",
       });
     });
 
@@ -404,7 +402,7 @@ describe("CategoryService", () => {
           parent_id: "category-3",
         }),
       ).rejects.toMatchObject({
-        code: CategoryErrorCode.PARENT_CATEGORY_INACTIVE,
+        code: "CATEGORY_PARENT_INACTIVE",
       });
     });
 
@@ -416,7 +414,7 @@ describe("CategoryService", () => {
           parent_id: "category-1",
         }),
       ).rejects.toMatchObject({
-        code: CategoryErrorCode.INVALID_PARENT,
+        code: "CATEGORY_INVALID_PARENT",
       });
     });
   });
@@ -462,7 +460,7 @@ describe("CategoryService", () => {
           status: "invalid" as any,
         }),
       ).rejects.toMatchObject({
-        code: CategoryErrorCode.INVALID_STATUS,
+        code: "CATEGORY_INVALID_STATUS",
       });
     });
   });
@@ -496,7 +494,7 @@ describe("CategoryService", () => {
           parent_id: "category-2",
         }),
       ).rejects.toMatchObject({
-        code: CategoryErrorCode.MAX_DEPTH_REACHED,
+        code: "CATEGORY_MAX_DEPTH_REACHED",
       });
 
       expect(mocks.categoryRepository.create).not.toHaveBeenCalled();
@@ -512,7 +510,7 @@ describe("CategoryService", () => {
           parent_id: "category-2",
         }),
       ).rejects.toMatchObject({
-        code: CategoryErrorCode.MAX_DEPTH_REACHED,
+        code: "CATEGORY_MAX_DEPTH_REACHED",
       });
 
       expect(mocks.categoryRepository.update).not.toHaveBeenCalled();
