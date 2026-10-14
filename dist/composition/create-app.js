@@ -7,6 +7,7 @@ import { StoreRepository } from "../database/repositories/store.repository.js";
 import { ProductImageRepository } from "../database/repositories/product-image.repository.js";
 import { ProductRepository } from "../database/repositories/product.repository.js";
 import { CategoryRepository } from "../database/repositories/category.repository.js";
+import { CartService } from "../services/cart.service.js";
 import { UserService } from "../services/user.service.js";
 import { StoreService } from "../services/store.service.js";
 import { SessionService } from "../services/session.service.js";
@@ -20,6 +21,7 @@ import { StoreController } from "../controllers/store.controller.js";
 import { AuthController } from "../controllers/auth.controller.js";
 import { ProductImageController } from "../controllers/product-image.controller.js";
 import { ProductController } from "../controllers/product.controller.js";
+import { CartController } from "../controllers/cart.controller.js";
 import { SharpImageProcessor } from "../image-processing/SharpImageProcessor.js";
 import { R2ImageStorage } from "../storage/R2ImageStorage.js";
 import { getR2Config } from "../storage/config/r2.config.js";
@@ -38,6 +40,7 @@ export function createConfiguredApp() {
     const otpService = new OtpService(new OtpRepository(db), db, new OtpCryptoService(), new OtpDeliveryRepository(db), userRepository, sessionRepository, phoneService);
     const productService = new ProductService(db, productRepository, sessionRepository, storeRepository, categoryRepository);
     const productImageService = new ProductImageService(productImageRepository, sessionRepository, productRepository, storeRepository, new SharpImageProcessor(), new R2ImageStorage(getR2Config()));
+    const cartService = new CartService(db);
     return createApp({
         sessionService,
         userController: new UserController(userService),
@@ -45,5 +48,6 @@ export function createConfiguredApp() {
         authController: new AuthController(otpService),
         productController: new ProductController(productService),
         productImageController: new ProductImageController(productImageService),
+        cartController: new CartController(cartService),
     });
 }

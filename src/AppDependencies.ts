@@ -4,12 +4,14 @@ import type { StoreController } from "./controllers/store.controller.js";
 import type { AuthController } from "./controllers/auth.controller.js";
 import type { ProductController } from "./controllers/product.controller.js";
 import type { ProductImageController } from "./controllers/product-image.controller.js";
+import type { CartController } from "./controllers/cart.controller.js";
 
 export interface AppDependencies {
   sessionService: SessionService;
   userController: UserController;
   storeController: StoreController;
   authController: AuthController;
+  cartController: CartController;
   productController: ProductController;
   productImageController: ProductImageController;
 }

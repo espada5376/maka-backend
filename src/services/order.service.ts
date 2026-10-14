@@ -60,6 +60,22 @@ export interface IOrderService {
     input: CreateOrderInput,
   ): Promise<OrderWithItems>;
 
+  getForCurrentBuyer(sessionId: string): Promise<OrderWithItems[]>;
+
+  getForCurrentBuyerById(
+    sessionId: string,
+    orderId: string,
+  ): Promise<OrderWithItems>;
+
+  getForSeller(sessionId: string, storeId: string): Promise<OrderWithItems[]>;
+
+  updateStatusBySeller(
+    sessionId: string,
+    storeId: string,
+    orderId: string,
+    status: OrderStatus,
+  ): Promise<Order>;
+
   createDirect(
     sessionId: string,
     input: CreateDirectOrderInput,
@@ -197,10 +213,94 @@ export class OrderService implements IOrderService {
     };
   }
 
+  private async getValidSession(sessionId: string) {
+    const session = await this.sessionRepository.findById(sessionId);
+
+    if (!session) {
+      throw createAppError(Errors.SESSION_NOT_FOUND);
+    }
+
+    if (session.expires_at <= new Date()) {
+      throw createAppError(Errors.SESSION_EXPIRED);
+    }
+
+    return session;
+  }
+
+  private async getOwnedStoreForSession(sessionId: string, storeId: string) {
+    const session = await this.getValidSession(sessionId);
+
+    if (!session.user_id) {
+      throw createAppError(Errors.STORE_FORBIDDEN);
+    }
+
+    const store = await this.storeRepository.findById(storeId);
+
+    if (!store) {
+      throw createAppError(Errors.STORE_NOT_FOUND);
+    }
+
+    if (store.owner_id !== session.user_id) {
+      throw createAppError(Errors.STORE_FORBIDDEN);
+    }
+
+    return { session, store };
+  }
+
   async getById(orderId: string): Promise<OrderWithItems> {
     const order = await this.orderRepository.findById(orderId);
 
     if (!order) {
+      throw createAppError(Errors.ORDER_NOT_FOUND);
+    }
+
+    return this.buildOrderWithItems(order);
+  }
+
+  async getForCurrentBuyer(sessionId: string): Promise<OrderWithItems[]> {
+    const session = await this.getValidSession(sessionId);
+
+    let orders: Order[];
+
+    if (!session.user_id) {
+      orders = await this.orderRepository.findBySessionId(session.id);
+    } else {
+      const [accountOrders, sessionOrders] = await Promise.all([
+        this.orderRepository.findByBuyerUserId(session.user_id),
+        this.orderRepository.findBySessionId(session.id),
+      ]);
+
+      const ordersById = new Map<string, Order>();
+
+      for (const order of [...accountOrders, ...sessionOrders]) {
+        ordersById.set(order.id, order);
+      }
+
+      orders = [...ordersById.values()].sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
+    }
+
+    return Promise.all(orders.map((order) => this.buildOrderWithItems(order)));
+  }
+
+  async getForCurrentBuyerById(
+    sessionId: string,
+    orderId: string,
+  ): Promise<OrderWithItems> {
+    const session = await this.getValidSession(sessionId);
+    const order = await this.orderRepository.findById(orderId);
+
+    if (!order) {
+      throw createAppError(Errors.ORDER_NOT_FOUND);
+    }
+
+    const belongsToSession = order.session_id === session.id;
+    const belongsToAccount =
+      session.user_id !== null && order.buyer_user_id === session.user_id;
+
+    if (!belongsToSession && !belongsToAccount) {
       throw createAppError(Errors.ORDER_NOT_FOUND);
     }
 
@@ -233,6 +333,49 @@ export class OrderService implements IOrderService {
     const orders = await this.orderRepository.findByStoreId(storeId);
 
     return Promise.all(orders.map((order) => this.buildOrderWithItems(order)));
+  }
+
+  async getForSeller(
+    sessionId: string,
+    storeId: string,
+  ): Promise<OrderWithItems[]> {
+    await this.getOwnedStoreForSession(sessionId, storeId);
+
+    const orders = await this.orderRepository.findByStoreId(storeId);
+
+    return Promise.all(orders.map((order) => this.buildOrderWithItems(order)));
+  }
+
+  async updateStatusBySeller(
+    sessionId: string,
+    storeId: string,
+    orderId: string,
+    newStatus: OrderStatus,
+  ): Promise<Order> {
+    await this.getOwnedStoreForSession(sessionId, storeId);
+
+    const order = await this.orderRepository.findById(orderId);
+
+    if (!order || order.store_id !== storeId) {
+      throw createAppError(Errors.ORDER_NOT_FOUND);
+    }
+
+    const allowedTransitions = ALLOWED_TRANSITIONS[order.status];
+
+    if (!allowedTransitions.includes(newStatus)) {
+      throw createAppError(Errors.INVALID_ORDER_STATUS_TRANSITION);
+    }
+
+    const updatedOrder = await this.orderRepository.updateStatus(
+      orderId,
+      newStatus,
+    );
+
+    if (!updatedOrder) {
+      throw createAppError(Errors.ORDER_NOT_FOUND);
+    }
+
+    return updatedOrder;
   }
 
   async updateStatus(orderId: string, newStatus: OrderStatus): Promise<Order> {

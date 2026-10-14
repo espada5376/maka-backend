@@ -1505,6 +1505,339 @@ describe("OrderService", () => {
   });
 
   // ---------------------------------------------------------------------------
+  // SECURE BUYER ORDER ACCESS
+  // ---------------------------------------------------------------------------
+
+  describe("getForCurrentBuyer", () => {
+    it("should reject a nonexistent session", async () => {
+      mocks.sessionRepository.findById.mockResolvedValue(undefined);
+
+      await expect(
+        orderService.getForCurrentBuyer(SESSION_ID),
+      ).rejects.toMatchObject({
+        code: "SESSION_NOT_FOUND",
+      });
+    });
+
+    it("should reject an expired session", async () => {
+      mocks.sessionRepository.findById.mockResolvedValue(
+        createSession({
+          expires_at: new Date(Date.now() - 1000),
+        }),
+      );
+
+      await expect(
+        orderService.getForCurrentBuyer(SESSION_ID),
+      ).rejects.toMatchObject({
+        code: "SESSION_EXPIRED",
+      });
+    });
+
+    it("should return only orders from the current session for an anonymous buyer", async () => {
+      const order = createOrder();
+
+      mocks.sessionRepository.findById.mockResolvedValue(createSession());
+      mocks.orderRepository.findBySessionId.mockResolvedValue([order]);
+
+      const result = await orderService.getForCurrentBuyer(SESSION_ID);
+
+      expect(result).toEqual([{ ...order, items: [] }]);
+      expect(mocks.orderRepository.findBySessionId).toHaveBeenCalledWith(
+        SESSION_ID,
+      );
+      expect(mocks.orderRepository.findByBuyerUserId).not.toHaveBeenCalled();
+    });
+
+    it("should combine account and session orders without duplicates", async () => {
+      const olderOrder = createOrder({
+        id: "aaaaaaaa-1111-1111-1111-111111111111",
+        buyer_user_id: USER_ID,
+        created_at: new Date("2026-01-01T10:00:00Z"),
+      });
+
+      const newerOrder = createOrder({
+        id: "bbbbbbbb-2222-2222-2222-222222222222",
+        buyer_user_id: USER_ID,
+        created_at: new Date("2026-01-02T10:00:00Z"),
+      });
+
+      mocks.sessionRepository.findById.mockResolvedValue(
+        createSession({ user_id: USER_ID }),
+      );
+
+      mocks.orderRepository.findByBuyerUserId.mockResolvedValue([
+        olderOrder,
+        newerOrder,
+      ]);
+
+      mocks.orderRepository.findBySessionId.mockResolvedValue([newerOrder]);
+
+      const result = await orderService.getForCurrentBuyer(SESSION_ID);
+
+      expect(result.map((order) => order.id)).toEqual([
+        newerOrder.id,
+        olderOrder.id,
+      ]);
+
+      expect(result).toHaveLength(2);
+      expect(mocks.orderRepository.findItems).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("getForCurrentBuyerById", () => {
+    it("should allow an anonymous buyer to access an order from the current session", async () => {
+      const order = createOrder();
+
+      mocks.sessionRepository.findById.mockResolvedValue(createSession());
+      mocks.orderRepository.findById.mockResolvedValue(order);
+
+      const result = await orderService.getForCurrentBuyerById(
+        SESSION_ID,
+        ORDER_ID,
+      );
+
+      expect(result).toEqual({ ...order, items: [] });
+    });
+
+    it("should allow an authenticated buyer to access an account order", async () => {
+      const order = createOrder({
+        buyer_user_id: USER_ID,
+        session_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      });
+
+      mocks.sessionRepository.findById.mockResolvedValue(
+        createSession({ user_id: USER_ID }),
+      );
+
+      mocks.orderRepository.findById.mockResolvedValue(order);
+
+      const result = await orderService.getForCurrentBuyerById(
+        SESSION_ID,
+        ORDER_ID,
+      );
+
+      expect(result.id).toBe(order.id);
+    });
+
+    it("should hide an order belonging to another buyer", async () => {
+      const order = createOrder({
+        session_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        buyer_user_id: BUYER_USER_ID,
+      });
+
+      mocks.sessionRepository.findById.mockResolvedValue(createSession());
+      mocks.orderRepository.findById.mockResolvedValue(order);
+
+      await expect(
+        orderService.getForCurrentBuyerById(SESSION_ID, ORDER_ID),
+      ).rejects.toMatchObject({
+        code: "ORDER_NOT_FOUND",
+      });
+
+      expect(mocks.orderRepository.findItems).not.toHaveBeenCalled();
+    });
+
+    it("should reject a nonexistent order", async () => {
+      mocks.sessionRepository.findById.mockResolvedValue(createSession());
+      mocks.orderRepository.findById.mockResolvedValue(undefined);
+
+      await expect(
+        orderService.getForCurrentBuyerById(SESSION_ID, ORDER_ID),
+      ).rejects.toMatchObject({
+        code: "ORDER_NOT_FOUND",
+      });
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // SECURE SELLER ORDER ACCESS
+  // ---------------------------------------------------------------------------
+
+  describe("getForSeller", () => {
+    it("should reject a nonexistent session", async () => {
+      mocks.sessionRepository.findById.mockResolvedValue(undefined);
+
+      await expect(
+        orderService.getForSeller(SESSION_ID, STORE_ID),
+      ).rejects.toMatchObject({
+        code: "SESSION_NOT_FOUND",
+      });
+    });
+
+    it("should reject an expired session", async () => {
+      mocks.sessionRepository.findById.mockResolvedValue(
+        createSession({
+          user_id: USER_ID,
+          expires_at: new Date(Date.now() - 1000),
+        }),
+      );
+
+      await expect(
+        orderService.getForSeller(SESSION_ID, STORE_ID),
+      ).rejects.toMatchObject({
+        code: "SESSION_EXPIRED",
+      });
+    });
+
+    it("should reject an anonymous session", async () => {
+      mocks.sessionRepository.findById.mockResolvedValue(createSession());
+
+      await expect(
+        orderService.getForSeller(SESSION_ID, STORE_ID),
+      ).rejects.toMatchObject({
+        code: "STORE_FORBIDDEN",
+      });
+
+      expect(mocks.storeRepository.findById).not.toHaveBeenCalled();
+    });
+
+    it("should reject a nonexistent store", async () => {
+      mocks.sessionRepository.findById.mockResolvedValue(
+        createSession({ user_id: USER_ID }),
+      );
+      mocks.storeRepository.findById.mockResolvedValue(undefined);
+
+      await expect(
+        orderService.getForSeller(SESSION_ID, STORE_ID),
+      ).rejects.toMatchObject({
+        code: "STORE_NOT_FOUND",
+      });
+    });
+
+    it("should reject a seller who does not own the store", async () => {
+      mocks.sessionRepository.findById.mockResolvedValue(
+        createSession({ user_id: USER_ID }),
+      );
+      mocks.storeRepository.findById.mockResolvedValue(
+        createStore({ owner_id: BUYER_USER_ID }),
+      );
+
+      await expect(
+        orderService.getForSeller(SESSION_ID, STORE_ID),
+      ).rejects.toMatchObject({
+        code: "STORE_FORBIDDEN",
+      });
+
+      expect(mocks.orderRepository.findByStoreId).not.toHaveBeenCalled();
+    });
+
+    it("should return orders when the current user owns the store", async () => {
+      const order = createOrder();
+
+      mocks.sessionRepository.findById.mockResolvedValue(
+        createSession({ user_id: USER_ID }),
+      );
+      mocks.storeRepository.findById.mockResolvedValue(createStore());
+      mocks.orderRepository.findByStoreId.mockResolvedValue([order]);
+
+      const result = await orderService.getForSeller(SESSION_ID, STORE_ID);
+
+      expect(result).toEqual([{ ...order, items: [] }]);
+      expect(mocks.orderRepository.findByStoreId).toHaveBeenCalledWith(
+        STORE_ID,
+      );
+    });
+  });
+
+  describe("updateStatusBySeller", () => {
+    it("should reject a seller who does not own the store", async () => {
+      mocks.sessionRepository.findById.mockResolvedValue(
+        createSession({ user_id: USER_ID }),
+      );
+      mocks.storeRepository.findById.mockResolvedValue(
+        createStore({ owner_id: BUYER_USER_ID }),
+      );
+
+      await expect(
+        orderService.updateStatusBySeller(
+          SESSION_ID,
+          STORE_ID,
+          ORDER_ID,
+          "confirmed",
+        ),
+      ).rejects.toMatchObject({
+        code: "STORE_FORBIDDEN",
+      });
+
+      expect(mocks.orderRepository.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it("should reject an order belonging to another store", async () => {
+      mocks.sessionRepository.findById.mockResolvedValue(
+        createSession({ user_id: USER_ID }),
+      );
+      mocks.storeRepository.findById.mockResolvedValue(createStore());
+      mocks.orderRepository.findById.mockResolvedValue(
+        createOrder({
+          store_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        }),
+      );
+
+      await expect(
+        orderService.updateStatusBySeller(
+          SESSION_ID,
+          STORE_ID,
+          ORDER_ID,
+          "confirmed",
+        ),
+      ).rejects.toMatchObject({
+        code: "ORDER_NOT_FOUND",
+      });
+
+      expect(mocks.orderRepository.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it("should reject an invalid status transition", async () => {
+      mocks.sessionRepository.findById.mockResolvedValue(
+        createSession({ user_id: USER_ID }),
+      );
+      mocks.storeRepository.findById.mockResolvedValue(createStore());
+      mocks.orderRepository.findById.mockResolvedValue(
+        createOrder({ status: "pending" }),
+      );
+
+      await expect(
+        orderService.updateStatusBySeller(
+          SESSION_ID,
+          STORE_ID,
+          ORDER_ID,
+          "delivered",
+        ),
+      ).rejects.toMatchObject({
+        code: "INVALID_ORDER_STATUS_TRANSITION",
+      });
+
+      expect(mocks.orderRepository.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it("should allow the store owner to confirm an order", async () => {
+      const updatedOrder = createOrder({ status: "confirmed" });
+
+      mocks.sessionRepository.findById.mockResolvedValue(
+        createSession({ user_id: USER_ID }),
+      );
+      mocks.storeRepository.findById.mockResolvedValue(createStore());
+      mocks.orderRepository.findById.mockResolvedValue(
+        createOrder({ status: "pending" }),
+      );
+      mocks.orderRepository.updateStatus.mockResolvedValue(updatedOrder);
+
+      const result = await orderService.updateStatusBySeller(
+        SESSION_ID,
+        STORE_ID,
+        ORDER_ID,
+        "confirmed",
+      );
+
+      expect(result).toEqual(updatedOrder);
+      expect(mocks.orderRepository.updateStatus).toHaveBeenCalledWith(
+        ORDER_ID,
+        "confirmed",
+      );
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // IDEMPOTENCE
   // ---------------------------------------------------------------------------
 
