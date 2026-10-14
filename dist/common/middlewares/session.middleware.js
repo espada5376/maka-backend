@@ -1,7 +1,6 @@
-import { SessionService } from "../../services/session.service.js";
 const SESSION_COOKIE_NAME = "session_id";
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
-export function createSessionMiddleware(sessionService = new SessionService()) {
+export function createSessionMiddleware(sessionService) {
     return async (req, res, next) => {
         try {
             const sessionId = req.cookies?.[SESSION_COOKIE_NAME];

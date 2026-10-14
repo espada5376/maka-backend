@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createCategoryRouter } from "../../src/routes/category.routes.js";
+import { createCategoryRouter } from "../../src/common/http/routes/category.routes.js";
 
 describe("CategoryRoutes", () => {
   const controller = {

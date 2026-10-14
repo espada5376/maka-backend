@@ -21,7 +21,7 @@ declare global {
 }
 
 export function createSessionMiddleware(
-  sessionService: SessionService = new SessionService(),
+  sessionService: SessionService,
 ) {
   return async (
     req: Request,

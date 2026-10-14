@@ -46,7 +46,7 @@ export function mapErrorToHttpResponse(error: unknown): HttpErrorResponse {
 function mapMulterError(error: multer.MulterError): HttpErrorResponse {
   if (error.code === "LIMIT_FILE_SIZE") {
     return {
-      statusCode: 400,
+      statusCode: 413,
       body: {
         success: false,
         error: {

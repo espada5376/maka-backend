@@ -10,7 +10,7 @@ import {
 import express from "express";
 import type { Server } from "node:http";
 
-import { createUserRouter } from "../../src/routes/user.routes.js";
+import { createUserRouter } from "../../src/common/http/routes/user.routes.js";
 
 describe("User routes", () => {
   const userController = {
@@ -139,39 +139,7 @@ describe("User routes", () => {
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // POST /api/v1/users
-  // ---------------------------------------------------------------------------
-
-  it("should route POST /api/v1/users to create", async () => {
-    const response = await fetch(
-      `${baseUrl}/api/v1/users`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          phone: "+22890123456",
-          name: "Koffi",
-        }),
-      },
-    );
-
-    expect(response.status).toBe(201);
-
-    expect(
-      userController.create,
-    ).toHaveBeenCalledTimes(1);
-
-    const req =
-      userController.create.mock.calls[0][0];
-
-    expect(req.body).toEqual({
-      phone: "+22890123456",
-      name: "Koffi",
-    });
-  });
+  
 
   // ---------------------------------------------------------------------------
   // PATCH /api/v1/users/:id
@@ -206,33 +174,25 @@ describe("User routes", () => {
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // PATCH /api/v1/users/:id/phone/verify
-  // ---------------------------------------------------------------------------
-
-  it(
-    "should route PATCH /api/v1/users/:id/phone/verify to markPhoneAsVerified",
-    async () => {
-      const response = await fetch(
-        `${baseUrl}/api/v1/users/user-1/phone/verify`,
-        {
-          method: "PATCH",
-        },
-      );
-
-      expect(response.status).toBe(200);
-
-      expect(
-        userController.markPhoneAsVerified,
-      ).toHaveBeenCalledTimes(1);
-
-      const req =
-        userController.markPhoneAsVerified
-          .mock.calls[0][0];
-
-      expect(req.params.id).toBe(
-        "user-1",
-      );
-    },
+  it("should not expose POST /api/v1/users", async () => {
+  const response = await fetch(
+    `${baseUrl}/api/v1/users`,
+    { method: "POST" },
   );
+
+  expect(response.status).toBe(404);
+  expect(userController.create).not.toHaveBeenCalled();
+});
+
+it("should not expose PATCH /api/v1/users/:id/phone/verify", async () => {
+  const response = await fetch(
+    `${baseUrl}/api/v1/users/user-1/phone/verify`,
+    { method: "PATCH" },
+  );
+
+  expect(response.status).toBe(404);
+  expect(
+    userController.markPhoneAsVerified,
+  ).not.toHaveBeenCalled();
+});
 });

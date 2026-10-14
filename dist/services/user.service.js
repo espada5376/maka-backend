@@ -1,11 +1,9 @@
-import { UserRepository, } from "../database/repositories/user.repository.js";
-import { PhoneService } from "./phone.service.js";
 import { createAppError } from "../common/errors/create-app-error.js";
 import { Errors } from "../common/errors/errors.js";
 export class UserService {
     userRepository;
     phoneService;
-    constructor(userRepository = new UserRepository(), phoneService = new PhoneService()) {
+    constructor(userRepository, phoneService) {
         this.userRepository = userRepository;
         this.phoneService = phoneService;
     }

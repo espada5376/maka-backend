@@ -30,7 +30,7 @@ export function mapErrorToHttpResponse(error) {
 function mapMulterError(error) {
     if (error.code === "LIMIT_FILE_SIZE") {
         return {
-            statusCode: 400,
+            statusCode: 413,
             body: {
                 success: false,
                 error: {

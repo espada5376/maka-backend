@@ -1,7 +1,6 @@
-import { OtpService } from "../services/otp.service.js";
 export class AuthController {
     otpService;
-    constructor(otpService = new OtpService()) {
+    constructor(otpService) {
         this.otpService = otpService;
     }
     async requestOtp(req, res, next) {

@@ -102,9 +102,12 @@ describe("ProductImageController", () => {
       expect(res.status).toHaveBeenCalledWith(400);
 
       expect(res.json).toHaveBeenCalledWith({
-        success: false,
-        message: "Image file is required",
-      });
+  success: false,
+  error: {
+    code: "IMAGE_REQUIRED",
+    message: "Image file is required",
+  },
+});
 
       expect(
         productImageService.create,
@@ -113,7 +116,7 @@ describe("ProductImageController", () => {
       expect(next).not.toHaveBeenCalled();
     });
 
-    it("should pass service errors to next", async () => {
+    it("should pass service errors", async () => {
       const error = new Error("Upload failed");
 
       productImageService.create.mockRejectedValue(
@@ -134,16 +137,15 @@ describe("ProductImageController", () => {
         },
       } as unknown as Request;
 
-      await productImageController.create(
-        req,
-        res as unknown as Response,
-        next as unknown as NextFunction,
-      );
+      await expect(
+  productImageController.create(
+    req,
+    res as unknown as Response,
+  ),
+).rejects.toBe(error);
 
-      expect(next).toHaveBeenCalledWith(error);
-
-      expect(res.status).not.toHaveBeenCalled();
-      expect(res.json).not.toHaveBeenCalled();
+expect(res.status).not.toHaveBeenCalled();
+expect(res.json).not.toHaveBeenCalled();
     });
   });
 
@@ -207,7 +209,7 @@ describe("ProductImageController", () => {
       expect(next).not.toHaveBeenCalled();
     });
 
-    it("should pass service errors to next", async () => {
+    it("should pass service errors", async () => {
       const error = new Error("Reorder failed");
 
       productImageService.reorder.mockRejectedValue(
@@ -227,16 +229,15 @@ describe("ProductImageController", () => {
         },
       } as unknown as Request;
 
-      await productImageController.reorder(
-        req,
-        res as unknown as Response,
-        next as unknown as NextFunction,
-      );
+      await expect(
+  productImageController.reorder(
+    req,
+    res as unknown as Response,
+  ),
+).rejects.toBe(error);
 
-      expect(next).toHaveBeenCalledWith(error);
-
-      expect(res.status).not.toHaveBeenCalled();
-      expect(res.json).not.toHaveBeenCalled();
+expect(res.status).not.toHaveBeenCalled();
+expect(res.json).not.toHaveBeenCalled();
     });
   });
 });

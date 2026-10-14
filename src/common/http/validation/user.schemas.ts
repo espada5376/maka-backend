@@ -12,3 +12,7 @@ export const updateUserSchema = z
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided",
   });
+
+export type UserIdParams = z.infer<typeof userIdParamsSchema>;
+
+export type UpdateUserBody = z.infer<typeof updateUserSchema>;

@@ -1,8 +1,7 @@
 import { sendSuccess } from "../common/http/response.js";
-import { UserService } from "../services/user.service.js";
 export class UserController {
     userService;
-    constructor(userService = new UserService()) {
+    constructor(userService) {
         this.userService = userService;
     }
     async getById(req, res) {

@@ -4,9 +4,71 @@ import { UserController } from "../src/controllers/user.controller.js";
 import { StoreController } from "../src/controllers/store.controller.js";
 import { AuthController } from "../src/controllers/auth.controller.js";
 
+import type { AppDependencies } from "../src/app-dependencies.js";
+import type { ProductImageController } from "../src/controllers/product-image.controller.js";
+import type { ProductController } from "../src/controllers/product.controller.js";
+
 import { createApp } from "../src/app.js";
 import type { Session } from "../src/database/repositories/session.repository.js";
 import { SessionService } from "../src/services/session.service.js";
+
+
+function createTestApp(
+  overrides: Partial<AppDependencies> = {},
+) {
+  const sessionService = {
+    getValidById: vi.fn(),
+    create: vi.fn(),
+  } as unknown as SessionService;
+
+  const userController = {
+    getById: vi.fn(),
+    update: vi.fn(),
+  } as unknown as UserController;
+
+  const storeController = {
+    create: vi.fn(),
+    getByOwnerId: vi.fn(),
+    getById: vi.fn(),
+    update: vi.fn(),
+    activate: vi.fn(),
+    deactivate: vi.fn(),
+  } as unknown as StoreController;
+
+  const authController = {
+    requestOtp: vi.fn(),
+    verifyOtp: vi.fn(),
+  } as unknown as AuthController;
+
+  const productController = {
+    create: vi.fn(),
+    getById: vi.fn(),
+    getByStore: vi.fn(),
+    getAvailableByStore: vi.fn(),
+    getByCategory: vi.fn(),
+    update: vi.fn(),
+    setAvailability: vi.fn(),
+    archive: vi.fn(),
+    unarchive: vi.fn(),
+  } as unknown as ProductController;
+
+  const productImageController = {
+    create: vi.fn(),
+    reorder: vi.fn(),
+  } as unknown as ProductImageController;
+
+  return createApp({
+    sessionService,
+    userController,
+    storeController,
+    authController,
+    productController,
+    productImageController,
+    ...overrides,
+  });
+}
+
+
 
 describe("app", () => {
   it("should reuse a valid session", async () => {
@@ -23,7 +85,7 @@ describe("app", () => {
       create: vi.fn(),
     } as unknown as SessionService;
 
-    const app = createApp(sessionService);
+    const app = createTestApp({ sessionService });
 
     app.get("/test-session", (req: Request, res: Response) => {
       res.status(200).json(req.session);
@@ -97,7 +159,10 @@ describe("app", () => {
       markPhoneAsVerified: vi.fn(),
     } as unknown as UserController;
 
-    const app = createApp(sessionService, userController);
+    const app = createTestApp({
+  sessionService,
+  userController,
+});
 
     const server = app.listen(0);
 
@@ -164,11 +229,10 @@ describe("app", () => {
     deactivate: vi.fn(),
   } as unknown as StoreController;
 
-  const app = createApp(
-    sessionService,
-    undefined,
-    storeController,
-  );
+  const app = createTestApp({
+  sessionService,
+  storeController,
+});
 
   const server = app.listen(0);
 
@@ -221,7 +285,7 @@ describe("app", () => {
       create: vi.fn().mockResolvedValue(session),
     } as unknown as SessionService;
 
-    const app = createApp(sessionService);
+    const app = createTestApp({ sessionService });
 
     app.get("/test-session", (req: Request, res: Response) => {
       res.status(200).json(req.session);
@@ -295,12 +359,10 @@ it("should mount the auth OTP request route", async () => {
     verifyOtp: vi.fn(),
   } as unknown as AuthController;
 
-  const app = createApp(
-    sessionService,
-    undefined,
-    undefined,
-    authController,
-  );
+  const app = createTestApp({
+  sessionService,
+  authController,
+});
 
   const server = app.listen(0);
 
@@ -388,12 +450,10 @@ expect(req.body.code).toBe("123456");
     }),
   } as unknown as AuthController;
 
-  const app = createApp(
-    sessionService,
-    undefined,
-    undefined,
-    authController,
-  );
+  const app = createTestApp({
+  sessionService,
+  authController,
+});
 
   const server = app.listen(0);
 

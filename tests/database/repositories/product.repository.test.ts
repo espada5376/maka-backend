@@ -124,6 +124,46 @@ describe("ProductRepository", () => {
     expect(product?.id).toBe(created.id);
   });
 
+  it("should find only available active products by id", async () => {
+  const { store, category } = await createStoreAndCategory();
+
+  const available = await productRepository.create({
+    store_id: store.id,
+    category_id: category.id,
+    name: "Disponible",
+    price: 10000,
+  });
+
+  const unavailable = await productRepository.create({
+    store_id: store.id,
+    category_id: category.id,
+    name: "Indisponible",
+    price: 20000,
+    availability: "unavailable",
+  });
+
+  const archived = await productRepository.create({
+    store_id: store.id,
+    category_id: category.id,
+    name: "Archivé",
+    price: 30000,
+    status: "archived",
+  });
+
+  expect(
+    await productRepository.findAvailableById(available.id),
+  ).toBeDefined();
+
+  expect(
+    await productRepository.findAvailableById(unavailable.id),
+  ).toBeUndefined();
+
+  expect(
+    await productRepository.findAvailableById(archived.id),
+  ).toBeUndefined();
+});
+
+
   it("should find products by store", async () => {
     const { store, category } =
       await createStoreAndCategory();
@@ -150,35 +190,38 @@ describe("ProductRepository", () => {
     expect(products).toHaveLength(2);
   });
 
-  it("should find active products by category", async () => {
-    const { store, category } =
-      await createStoreAndCategory();
+  it("should find only available active products by category", async () => {
+  const { store, category } = await createStoreAndCategory();
 
-    await productRepository.create({
-      store_id: store.id,
-      category_id: category.id,
-      name: "Produit actif",
-      price: 10000,
-    });
-
-    await productRepository.create({
-      store_id: store.id,
-      category_id: category.id,
-      name: "Produit archivé",
-      price: 20000,
-      status: "archived",
-    });
-
-    const products =
-      await productRepository.findByCategoryId(
-        category.id,
-      );
-
-    expect(products).toHaveLength(1);
-    expect(products[0].name).toBe(
-      "Produit actif",
-    );
+  await productRepository.create({
+    store_id: store.id,
+    category_id: category.id,
+    name: "Disponible",
+    price: 10000,
+    availability: "available",
   });
+
+  await productRepository.create({
+    store_id: store.id,
+    category_id: category.id,
+    name: "Indisponible",
+    price: 20000,
+    availability: "unavailable",
+  });
+
+  await productRepository.create({
+    store_id: store.id,
+    category_id: category.id,
+    name: "Archivé",
+    price: 30000,
+    status: "archived",
+  });
+
+  const products = await productRepository.findByCategoryId(category.id);
+
+  expect(products).toHaveLength(1);
+  expect(products[0].name).toBe("Disponible");
+});
 
   it("should find only available active products by store", async () => {
     const { store, category } =

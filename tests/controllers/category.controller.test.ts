@@ -50,7 +50,7 @@ describe("CategoryController", () => {
       expect(next).not.toHaveBeenCalled();
     });
 
-    it("should pass service errors to next", async () => {
+    it("should propagate service errors", async () => {
       const error = new Error("Service error");
 
       categoryService.getById.mockRejectedValue(error);
@@ -61,9 +61,9 @@ describe("CategoryController", () => {
         },
       };
 
-      await controller.getById(req as any, res as any, next);
-
-      expect(next).toHaveBeenCalledWith(error);
+      await expect(
+  controller.getById(req as any, res as any),
+).rejects.toBe(error);
     });
   });
 
@@ -93,7 +93,7 @@ describe("CategoryController", () => {
       expect(next).not.toHaveBeenCalled();
     });
 
-    it("should pass service errors to next", async () => {
+    it("should propagate service errors", async () => {
       const error = new Error("Service error");
 
       categoryService.getBySlug.mockRejectedValue(error);
@@ -104,9 +104,9 @@ describe("CategoryController", () => {
         },
       };
 
-      await controller.getBySlug(req as any, res as any, next);
-
-      expect(next).toHaveBeenCalledWith(error);
+      await expect(
+  controller.getBySlug(req as any, res as any),
+).rejects.toBe(error);
     });
   });
 
@@ -139,7 +139,7 @@ describe("CategoryController", () => {
       expect(next).not.toHaveBeenCalled();
     });
 
-    it("should pass service errors to next", async () => {
+    it("should propagate service errors", async () => {
       const error = new Error("Service error");
 
       categoryService.getChildren.mockRejectedValue(error);
@@ -150,9 +150,9 @@ describe("CategoryController", () => {
         },
       };
 
-      await controller.getChildren(req as any, res as any, next);
-
-      expect(next).toHaveBeenCalledWith(error);
+      await expect(
+  controller.getChildren(req as any, res as any),
+).rejects.toBe(error);
     });
   });
 
@@ -181,16 +181,16 @@ describe("CategoryController", () => {
       expect(next).not.toHaveBeenCalled();
     });
 
-    it("should pass service errors to next", async () => {
+    it("should propagate service errors", async () => {
       const error = new Error("Service error");
 
       categoryService.getRootCategories.mockRejectedValue(error);
 
       const req = {};
 
-      await controller.getRootCategories(req as any, res as any, next);
-
-      expect(next).toHaveBeenCalledWith(error);
+      await expect(
+  controller.getRootCategories(req as any, res as any),
+).rejects.toBe(error);
     });
   });
 
@@ -224,7 +224,7 @@ describe("CategoryController", () => {
       expect(next).not.toHaveBeenCalled();
     });
 
-    it("should pass service errors to next", async () => {
+    it("should propagate service errors", async () => {
       const error = new Error("Service error");
 
       categoryService.create.mockRejectedValue(error);
@@ -236,9 +236,9 @@ describe("CategoryController", () => {
         },
       };
 
-      await controller.create(req as any, res as any, next);
-
-      expect(next).toHaveBeenCalledWith(error);
+      await expect(
+  controller.create(req as any, res as any),
+).rejects.toBe(error);
     });
   });
 
@@ -277,7 +277,7 @@ describe("CategoryController", () => {
       expect(next).not.toHaveBeenCalled();
     });
 
-    it("should pass service errors to next", async () => {
+    it("should propagate service errors", async () => {
       const error = new Error("Service error");
 
       categoryService.update.mockRejectedValue(error);
@@ -291,9 +291,9 @@ describe("CategoryController", () => {
         },
       };
 
-      await controller.update(req as any, res as any, next);
-
-      expect(next).toHaveBeenCalledWith(error);
+      await expect(
+  controller.update(req as any, res as any),
+).rejects.toBe(error);
     });
   });
 });

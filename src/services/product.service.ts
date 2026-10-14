@@ -37,7 +37,10 @@ export interface IProductService {
 
   getById(productId: string): Promise<Product>;
 
-  getByStore(storeId: string): Promise<Product[]>;
+  getByStore(
+  sessionId: string,
+  storeId: string,
+): Promise<Product[]>;
 
   getByCategory(categoryId: string): Promise<Product[]>;
 
@@ -239,23 +242,40 @@ export class ProductService implements IProductService {
   // ============================================================
 
   async getById(productId: string): Promise<Product> {
-    const product =
-      await this.productRepository.findById(productId);
+  const product =
+    await this.productRepository.findAvailableById(productId);
 
-    if (!product) {
-      throw createAppError(Errors.PRODUCT_NOT_FOUND);
-    }
-
-    return product;
+  if (!product) {
+    throw createAppError(Errors.PRODUCT_NOT_FOUND);
   }
+
+  return product;
+}
 
   // ============================================================
   // GET BY STORE
   // ============================================================
 
-  async getByStore(storeId: string): Promise<Product[]> {
-    return this.productRepository.findByStoreId(storeId);
+  async getByStore(
+  sessionId: string,
+  storeId: string,
+): Promise<Product[]> {
+  const session =
+    await this.getAuthenticatedSession(sessionId);
+
+  const store =
+    await this.storeRepository.findById(storeId);
+
+  if (!store) {
+    throw createAppError(Errors.STORE_NOT_FOUND);
   }
+
+  if (store.owner_id !== session.user_id) {
+    throw createAppError(Errors.PRODUCT_FORBIDDEN);
+  }
+
+  return this.productRepository.findByStoreId(storeId);
+}
 
   // ============================================================
   // GET BY CATEGORY

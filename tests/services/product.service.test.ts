@@ -7,6 +7,7 @@ transaction: vi.fn(),
 
 productRepository: {
 findById: vi.fn(),
+findAvailableById: vi.fn(),
 findByStoreId: vi.fn(),
 findByCategoryId: vi.fn(),
 findAvailableByStoreId: vi.fn(),
@@ -46,6 +47,7 @@ default: mocks.database,
   vi.mock("../../src/database/repositories/product.repository.js", () => ({
   ProductRepository: class {
   findById = mocks.productRepository.findById;
+  findAvailableById = mocks.productRepository.findAvailableById;
   findByStoreId = mocks.productRepository.findByStoreId;
   findByCategoryId = mocks.productRepository.findByCategoryId;
   findAvailableByStoreId = mocks.productRepository.findAvailableByStoreId;
@@ -225,6 +227,8 @@ mocks.storeRepository.findById.mockResolvedValue(activeStore);
 mocks.categoryRepository.findById.mockResolvedValue(activeCategory);
 
 mocks.productRepository.findById.mockResolvedValue(activeProduct);
+
+mocks.productRepository.findAvailableById.mockResolvedValue(activeProduct);
 
 mocks.productRepository.findByStoreId.mockResolvedValue([
   activeProduct,
@@ -578,41 +582,43 @@ it("should keep a null description when none is provided", async () => {
 
 });
 
+
+
+
 // ============================================================
 // GET BY ID
 // ============================================================
 
 describe("getById", () => {
-it("should return the product", async () => {
-const result = await service.getById("product-1");
+  it("should return an available active product", async () => {
+    const result = await service.getById("product-1");
 
-
-  expect(result).toEqual(activeProduct);
-
-  expect(
-    mocks.productRepository.findById,
-  ).toHaveBeenCalledWith("product-1");
-});
-
-it("should reject when the product does not exist", async () => {
-  mocks.productRepository.findById.mockResolvedValue(undefined);
-
-  await expect(
-    service.getById("product-unknown"),
-  ).rejects.toMatchObject({
-    code: "PRODUCT_NOT_FOUND",
+    expect(result).toEqual(activeProduct);
+    expect(
+      mocks.productRepository.findAvailableById,
+    ).toHaveBeenCalledWith("product-1");
+    expect(
+      mocks.productRepository.findById,
+    ).not.toHaveBeenCalled();
   });
-});
 
-it("should not require authentication for public product reading", async () => {
-  await service.getById("product-1");
+  it("should reject when the product does not exist or is unavailable", async () => {
+    mocks.productRepository.findAvailableById.mockResolvedValue(undefined);
 
-  expect(
-    mocks.sessionRepository.findById,
-  ).not.toHaveBeenCalled();
-});
+    await expect(
+      service.getById("product-unknown"),
+    ).rejects.toMatchObject({
+      code: "PRODUCT_NOT_FOUND",
+    });
+  });
 
+  it("should not require authentication for public product reading", async () => {
+    await service.getById("product-1");
 
+    expect(
+      mocks.sessionRepository.findById,
+    ).not.toHaveBeenCalled();
+  });
 });
 
 // ============================================================
@@ -620,32 +626,91 @@ it("should not require authentication for public product reading", async () => {
 // ============================================================
 
 describe("getByStore", () => {
-it("should return products belonging to the store", async () => {
-const result = await service.getByStore("store-1");
+  it("should return all products belonging to the authenticated owner's store", async () => {
+    const result = await service.getByStore("session-1", "store-1");
 
-  expect(result).toEqual([
-    activeProduct,
-    secondProduct,
-  ]);
+    expect(result).toEqual([
+      activeProduct,
+      secondProduct,
+    ]);
 
-  expect(
-    mocks.productRepository.findByStoreId,
-  ).toHaveBeenCalledWith("store-1");
+    expect(
+      mocks.sessionRepository.findById,
+    ).toHaveBeenCalledWith("session-1");
+
+    expect(
+      mocks.storeRepository.findById,
+    ).toHaveBeenCalledWith("store-1");
+
+    expect(
+      mocks.productRepository.findByStoreId,
+    ).toHaveBeenCalledWith("store-1");
+  });
+
+  it("should reject when the session does not exist", async () => {
+    mocks.sessionRepository.findById.mockResolvedValue(undefined);
+
+    await expect(
+      service.getByStore("session-unknown", "store-1"),
+    ).rejects.toMatchObject({
+      code: "SESSION_NOT_FOUND",
+    });
+  });
+
+  it("should reject when the session is anonymous", async () => {
+    mocks.sessionRepository.findById.mockResolvedValue(anonymousSession);
+
+    await expect(
+      service.getByStore("session-anonymous", "store-1"),
+    ).rejects.toMatchObject({
+      code: "PRODUCT_FORBIDDEN",
+    });
+  });
+
+  it("should reject when the session has expired", async () => {
+    mocks.sessionRepository.findById.mockResolvedValue(expiredSession);
+
+    await expect(
+      service.getByStore("session-expired", "store-1"),
+    ).rejects.toMatchObject({
+      code: "SESSION_EXPIRED",
+    });
+  });
+
+  it("should reject when the store does not exist", async () => {
+    mocks.storeRepository.findById.mockResolvedValue(undefined);
+
+    await expect(
+      service.getByStore("session-1", "store-unknown"),
+    ).rejects.toMatchObject({
+      code: "STORE_NOT_FOUND",
+    });
+  });
+
+  it("should reject when the store belongs to another user", async () => {
+    mocks.storeRepository.findById.mockResolvedValue(otherOwnerStore);
+
+    await expect(
+      service.getByStore("session-1", "store-2"),
+    ).rejects.toMatchObject({
+      code: "PRODUCT_FORBIDDEN",
+    });
+  });
+
+  it("should return an empty array when the store has no products", async () => {
+    mocks.productRepository.findByStoreId.mockResolvedValue([]);
+
+    const result = await service.getByStore("session-1", "store-1");
+
+    expect(result).toEqual([]);
+  });
 });
 
-it("should return an empty array when the store has no products", async () => {
-  mocks.productRepository.findByStoreId.mockResolvedValue([]);
-
-  const result = await service.getByStore("store-1");
-
-  expect(result).toEqual([]);
-});
 
 
-});
 
 // ============================================================
-// GET BY CATEGORY
+// CATEGORY
 // ============================================================
 
 describe("getByCategory", () => {

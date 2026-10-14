@@ -123,7 +123,7 @@ export class ProductService {
     // GET BY ID
     // ============================================================
     async getById(productId) {
-        const product = await this.productRepository.findById(productId);
+        const product = await this.productRepository.findAvailableById(productId);
         if (!product) {
             throw createAppError(Errors.PRODUCT_NOT_FOUND);
         }
@@ -132,7 +132,15 @@ export class ProductService {
     // ============================================================
     // GET BY STORE
     // ============================================================
-    async getByStore(storeId) {
+    async getByStore(sessionId, storeId) {
+        const session = await this.getAuthenticatedSession(sessionId);
+        const store = await this.storeRepository.findById(storeId);
+        if (!store) {
+            throw createAppError(Errors.STORE_NOT_FOUND);
+        }
+        if (store.owner_id !== session.user_id) {
+            throw createAppError(Errors.PRODUCT_FORBIDDEN);
+        }
         return this.productRepository.findByStoreId(storeId);
     }
     // ============================================================

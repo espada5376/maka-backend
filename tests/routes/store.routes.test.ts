@@ -2,7 +2,7 @@ import express from "express";
 import type { Server } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createStoreRouter } from "../../src/routes/store.routes.js";
+import { createStoreRouter } from "../../src/common/http/routes/store.routes.js";
 import type { StoreController } from "../../src/controllers/store.controller.js";
 
 describe("StoreRouter", () => {
@@ -76,8 +76,10 @@ describe("StoreRouter", () => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        name: "Ma Boutique",
-      }),
+  name: "Ma Boutique",
+  country: "TG",
+  city: "Lomé",
+}),
     });
 
     expect(response.status).toBe(201);

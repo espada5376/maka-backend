@@ -1,4 +1,13 @@
-import { Request, Response, NextFunction } from "express";
+import type { Response } from "express";
+
+import { sendSuccess } from "../common/http/response.js";
+import type { HttpRequest } from "../common/http/request.js";
+import type {
+  CategoryIdParams,
+  CategorySlugParams,
+  CreateCategoryBody,
+  UpdateCategoryBody,
+} from "../common/http/validation/category.schemas.js";
 import { CategoryService } from "../services/category.service.js";
 
 export class CategoryController {
@@ -7,109 +16,68 @@ export class CategoryController {
   ) {}
 
   async getById(
-    req: Request,
+    req: HttpRequest<CategoryIdParams>,
     res: Response,
-    next: NextFunction,
   ): Promise<void> {
-    try {
-      const category = await this.categoryService.getById(req.params.id);
+    const category = await this.categoryService.getById(
+      req.params.id,
+    );
 
-      res.status(200).json({
-        success: true,
-        data: category,
-      });
-    } catch (error) {
-      next(error);
-    }
+    sendSuccess(res, 200, category);
   }
 
   async getBySlug(
-    req: Request,
+    req: HttpRequest<CategorySlugParams>,
     res: Response,
-    next: NextFunction,
   ): Promise<void> {
-    try {
-      const category = await this.categoryService.getBySlug(req.params.slug);
+    const category = await this.categoryService.getBySlug(
+      req.params.slug,
+    );
 
-      res.status(200).json({
-        success: true,
-        data: category,
-      });
-    } catch (error) {
-      next(error);
-    }
+    sendSuccess(res, 200, category);
   }
 
   async getChildren(
-    req: Request,
+    req: HttpRequest<CategoryIdParams>,
     res: Response,
-    next: NextFunction,
   ): Promise<void> {
-    try {
-      const categories = await this.categoryService.getChildren(
-        req.params.id,
-      );
+    const categories = await this.categoryService.getChildren(
+      req.params.id,
+    );
 
-      res.status(200).json({
-        success: true,
-        data: categories,
-      });
-    } catch (error) {
-      next(error);
-    }
+    sendSuccess(res, 200, categories);
   }
 
   async getRootCategories(
-    _req: Request,
+    _req: HttpRequest,
     res: Response,
-    next: NextFunction,
   ): Promise<void> {
-    try {
-      const categories = await this.categoryService.getRootCategories();
+    const categories =
+      await this.categoryService.getRootCategories();
 
-      res.status(200).json({
-        success: true,
-        data: categories,
-      });
-    } catch (error) {
-      next(error);
-    }
+    sendSuccess(res, 200, categories);
   }
 
   async create(
-    req: Request,
+    req: HttpRequest<{}, CreateCategoryBody>,
     res: Response,
-    next: NextFunction,
   ): Promise<void> {
-    try {
-      const category = await this.categoryService.create(req.body);
+    const category = await this.categoryService.create(
+      req.body,
+    );
 
-      res.status(201).json({
-        success: true,
-        data: category,
-      });
-    } catch (error) {
-      next(error);
-    }
+    sendSuccess(res, 201, category);
   }
 
   async update(
-    req: Request,
+    req: HttpRequest<CategoryIdParams, UpdateCategoryBody>,
     res: Response,
-    next: NextFunction,
   ): Promise<void> {
-    try {
-      const category = await this.categoryService.update(
-        req.params.id,
-        req.body,
-      );
+    const category = await this.categoryService.update(
+      req.params.id,
+      req.body,
+    );
 
-      res.status(200).json({
-        success: true,
-        data: category,
-      });
-    } catch (error) {
-      next(error);
-    }
+    sendSuccess(res, 200, category);
   }
 }

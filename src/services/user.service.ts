@@ -11,8 +11,8 @@ import { Errors } from "../common/errors/errors.js";
 
 export class UserService {
   constructor(
-    private readonly userRepository: UserRepository = new UserRepository(),
-    private readonly phoneService: PhoneService = new PhoneService(),
+    private readonly userRepository: UserRepository,
+    private readonly phoneService: PhoneService,
   ) {}
 
   async getById(id: string): Promise<User> {

@@ -1,6 +1,4 @@
-import db from "../database/knex.js";
 import { StoreRepository, } from "../database/repositories/store.repository.js";
-import { SessionRepository } from "../database/repositories/session.repository.js";
 import { EventRepository } from "../database/repositories/event.repository.js";
 import { Errors } from "../common/errors/errors.js";
 import { createAppError } from "../common/errors/create-app-error.js";
@@ -9,7 +7,7 @@ export class StoreService {
     database;
     storeRepository;
     sessionRepository;
-    constructor(database = db, storeRepository = new StoreRepository(database), sessionRepository = new SessionRepository(database)) {
+    constructor(database, storeRepository, sessionRepository) {
         this.database = database;
         this.storeRepository = storeRepository;
         this.sessionRepository = sessionRepository;

@@ -47,6 +47,16 @@ export class ProductRepository {
     return this.database<Product>("products").where({ id }).first();
   }
 
+  async findAvailableById(id: string): Promise<Product | undefined> {
+  return this.database<Product>("products")
+    .where({
+      id,
+      status: "active",
+      availability: "available",
+    })
+    .first();
+}
+
   async findByStoreId(storeId: string): Promise<Product[]> {
     return this.database<Product>("products")
       .where({ store_id: storeId })
@@ -58,6 +68,7 @@ export class ProductRepository {
       .where({
         category_id: categoryId,
         status: "active",
+        availability: "available",
       })
       .orderBy("created_at", "desc");
   }

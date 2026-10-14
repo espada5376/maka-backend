@@ -1,11 +1,4 @@
-import db from "../database/knex.js";
 import { randomInt } from "node:crypto";
-import { PhoneService } from "./phone.service.js";
-import { UserRepository, } from "../database/repositories/user.repository.js";
-import { SessionRepository } from "../database/repositories/session.repository.js";
-import { OtpCryptoService } from "./otp-crypto.service.js";
-import { OtpRepository, } from "../database/repositories/otp.repository.js";
-import { OtpDeliveryRepository } from "../database/repositories/otp-delivery.repository.js";
 import { createAppError } from "../common/errors/create-app-error.js";
 import { Errors } from "../common/errors/errors.js";
 const OTP_EXPIRATION_MS = 5 * 60 * 1000;
@@ -18,7 +11,7 @@ export class OtpService {
     userRepository;
     sessionRepository;
     phoneService;
-    constructor(otpRepository = new OtpRepository(), database = db, otpCryptoService = new OtpCryptoService(), otpDeliveryRepository = new OtpDeliveryRepository(), userRepository = new UserRepository(), sessionRepository = new SessionRepository(), phoneService = new PhoneService()) {
+    constructor(otpRepository, database, otpCryptoService, otpDeliveryRepository, userRepository, sessionRepository, phoneService) {
         this.otpRepository = otpRepository;
         this.database = database;
         this.otpCryptoService = otpCryptoService;

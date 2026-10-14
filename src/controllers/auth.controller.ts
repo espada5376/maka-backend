@@ -4,7 +4,7 @@ import { OtpService } from "../services/otp.service.js";
 
 export class AuthController {
   constructor(
-    private readonly otpService: OtpService = new OtpService(),
+    private readonly otpService: OtpService,
   ) {}
 
   async requestOtp(

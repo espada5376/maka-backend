@@ -33,7 +33,7 @@ describe("mapErrorToHttpResponse", () => {
     const response = mapErrorToHttpResponse(error);
 
     expect(response).toEqual({
-      statusCode: 400,
+      statusCode: 413,
       body: {
         success: false,
         error: {

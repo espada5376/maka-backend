@@ -6,6 +6,8 @@ import {
   vi,
 } from "vitest";
 
+import { PhoneService } from "../../src/services/phone.service.js";
+
 import { UserRepository } from "../../src/database/repositories/user.repository.js";
 import { SessionRepository } from "../../src/database/repositories/session.repository.js";
 
@@ -30,15 +32,21 @@ describe("OtpService", () => {
   
   const phone = "+22890123456";
 
+
   const userRepository = new UserRepository(db);
 const sessionRepository = new SessionRepository(db);
 
-  const otpService = new OtpService(
-    otpRepository,
-    db,
-    otpCryptoService,
-    otpDeliveryRepository,
-  );
+  const phoneService = new PhoneService();
+
+const otpService = new OtpService(
+  otpRepository,
+  db,
+  otpCryptoService,
+  otpDeliveryRepository,
+  userRepository,
+  sessionRepository,
+  phoneService,
+);
 
   let sessionId: string;
 
@@ -265,13 +273,14 @@ it("rolls back authentication when session update fails", async () => {
   } as unknown as SessionRepository;
 
   const failingOtpService = new OtpService(
-    otpRepository,
-    db,
-    otpCryptoService,
-    otpDeliveryRepository,
-    userRepository,
-    failingSessionRepository,
-  );
+  otpRepository,
+  db,
+  otpCryptoService,
+  otpDeliveryRepository,
+  userRepository,
+  failingSessionRepository,
+  phoneService,
+);  
 
   const requested = await failingOtpService.requestOtp(
     sessionId,

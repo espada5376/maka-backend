@@ -6,6 +6,8 @@ import {
   vi,
 } from "vitest";
 
+import { PhoneService } from "../../src/services/phone.service.js";
+
 import { UserService } from "../../src/services/user.service.js";
 
 describe("UserService", () => {
@@ -17,9 +19,13 @@ describe("UserService", () => {
     markPhoneAsVerified: vi.fn(),
   };
 
-  const userService = new UserService(
-    userRepository as any,
-  );
+
+  const phoneService = new PhoneService();
+
+const userService = new UserService(
+  userRepository as any,
+  phoneService,
+);
 
   beforeEach(() => {
     vi.clearAllMocks();

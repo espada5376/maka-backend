@@ -9,7 +9,7 @@ import {
 } from "../validation/user.schemas.js";
 
 export function createUserRouter(
-  userController: UserController = new UserController(),
+  userController: UserController,
 ) {
   const router = Router();
 

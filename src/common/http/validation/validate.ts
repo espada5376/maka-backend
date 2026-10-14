@@ -4,7 +4,9 @@ import type { ZodType } from "zod";
 import { createAppError } from "../../errors/create-app-error.js";
 import { Errors } from "../../errors/errors.js";
 
-export function validateBody(schema: ZodType): RequestHandler {
+export function validateBody<T>(
+  schema: ZodType<T>,
+): RequestHandler {
   return (req, _res, next) => {
     const result = schema.safeParse(req.body);
 
@@ -18,7 +20,9 @@ export function validateBody(schema: ZodType): RequestHandler {
   };
 }
 
-export function validateParams(schema: ZodType): RequestHandler {
+export function validateParams<T>(
+  schema: ZodType<T>,
+): RequestHandler {
   return (req, _res, next) => {
     const result = schema.safeParse(req.params);
 
@@ -27,12 +31,14 @@ export function validateParams(schema: ZodType): RequestHandler {
       return;
     }
 
-    req.params = result.data;
+    Object.assign(req.params, result.data);
     next();
   };
 }
 
-export function validateQuery(schema: ZodType): RequestHandler {
+export function validateQuery<T>(
+  schema: ZodType<T>,
+): RequestHandler {
   return (req, _res, next) => {
     const result = schema.safeParse(req.query);
 
@@ -41,7 +47,7 @@ export function validateQuery(schema: ZodType): RequestHandler {
       return;
     }
 
-    req.query = result.data;
+    Object.assign(req.query, result.data);
     next();
   };
 }

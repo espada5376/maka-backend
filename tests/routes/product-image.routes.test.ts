@@ -1,7 +1,7 @@
 import express from "express";
 import { describe, expect, it, vi } from "vitest";
 
-import { createProductImageRouter } from "../../src/routes/product-image.routes.js";
+import { createProductImageRouter } from "../../src/common/http/routes/product-image.routes.js";
 
 describe("ProductImageRouter", () => {
   it("should define the reorder route", () => {

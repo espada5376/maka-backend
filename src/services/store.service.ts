@@ -1,5 +1,4 @@
 import { Knex } from "knex";
-import db from "../database/knex.js";
 
 import {
   Store,
@@ -48,9 +47,9 @@ export interface IStoreService {
 
 export class StoreService implements IStoreService {
   constructor(
-    private readonly database: Knex = db,
-    private readonly storeRepository = new StoreRepository(database),
-    private readonly sessionRepository = new SessionRepository(database),
+      private readonly database: Knex,
+  private readonly storeRepository: StoreRepository,
+  private readonly sessionRepository: SessionRepository,
   ) {}
 
   // ---------------------------------------------------------------------------

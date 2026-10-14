@@ -1,78 +1,31 @@
+import { sendSuccess } from "../common/http/response.js";
 export class CategoryController {
     categoryService;
     constructor(categoryService) {
         this.categoryService = categoryService;
     }
-    async getById(req, res, next) {
-        try {
-            const category = await this.categoryService.getById(req.params.id);
-            res.status(200).json({
-                success: true,
-                data: category,
-            });
-        }
-        catch (error) {
-            next(error);
-        }
+    async getById(req, res) {
+        const category = await this.categoryService.getById(req.params.id);
+        sendSuccess(res, 200, category);
     }
-    async getBySlug(req, res, next) {
-        try {
-            const category = await this.categoryService.getBySlug(req.params.slug);
-            res.status(200).json({
-                success: true,
-                data: category,
-            });
-        }
-        catch (error) {
-            next(error);
-        }
+    async getBySlug(req, res) {
+        const category = await this.categoryService.getBySlug(req.params.slug);
+        sendSuccess(res, 200, category);
     }
-    async getChildren(req, res, next) {
-        try {
-            const categories = await this.categoryService.getChildren(req.params.id);
-            res.status(200).json({
-                success: true,
-                data: categories,
-            });
-        }
-        catch (error) {
-            next(error);
-        }
+    async getChildren(req, res) {
+        const categories = await this.categoryService.getChildren(req.params.id);
+        sendSuccess(res, 200, categories);
     }
-    async getRootCategories(_req, res, next) {
-        try {
-            const categories = await this.categoryService.getRootCategories();
-            res.status(200).json({
-                success: true,
-                data: categories,
-            });
-        }
-        catch (error) {
-            next(error);
-        }
+    async getRootCategories(_req, res) {
+        const categories = await this.categoryService.getRootCategories();
+        sendSuccess(res, 200, categories);
     }
-    async create(req, res, next) {
-        try {
-            const category = await this.categoryService.create(req.body);
-            res.status(201).json({
-                success: true,
-                data: category,
-            });
-        }
-        catch (error) {
-            next(error);
-        }
+    async create(req, res) {
+        const category = await this.categoryService.create(req.body);
+        sendSuccess(res, 201, category);
     }
-    async update(req, res, next) {
-        try {
-            const category = await this.categoryService.update(req.params.id, req.body);
-            res.status(200).json({
-                success: true,
-                data: category,
-            });
-        }
-        catch (error) {
-            next(error);
-        }
+    async update(req, res) {
+        const category = await this.categoryService.update(req.params.id, req.body);
+        sendSuccess(res, 200, category);
     }
 }

@@ -1,5 +1,5 @@
 import { Knex } from "knex";
-import db from "../database/knex.js";
+
 import { randomInt } from "node:crypto";
 
 import { PhoneService } from "./phone.service.js";
@@ -25,13 +25,13 @@ const MAX_ATTEMPTS = 5;
 
 export class OtpService {
   constructor(
-    private readonly otpRepository: OtpRepository = new OtpRepository(),
-    private readonly database: Knex = db,
-    private readonly otpCryptoService: OtpCryptoService = new OtpCryptoService(),
-    private readonly otpDeliveryRepository: OtpDeliveryRepository = new OtpDeliveryRepository(),
-    private readonly userRepository: UserRepository = new UserRepository(),
-    private readonly sessionRepository: SessionRepository = new SessionRepository(),
-    private readonly phoneService: PhoneService = new PhoneService(),
+      private readonly otpRepository: OtpRepository,
+  private readonly database: Knex,
+  private readonly otpCryptoService: OtpCryptoService,
+  private readonly otpDeliveryRepository: OtpDeliveryRepository,
+  private readonly userRepository: UserRepository,
+  private readonly sessionRepository: SessionRepository,
+  private readonly phoneService: PhoneService,
   ) {}
 
   async requestOtp(sessionId: string, phone: string): Promise<OtpVerification> {

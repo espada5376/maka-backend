@@ -1,7 +1,8 @@
 import "dotenv/config";
-import app from "./app.js";
+import { createConfiguredApp } from "./composition/create-app.js";
 import { createOtpDeliveryWorkerRunner, } from "./notifications/create-otp-delivery-worker-runner.js";
 import { createNotificationWorkerRunner, } from "./notifications/create-notification-worker-runner.js";
+const app = createConfiguredApp();
 const PORT = process.env.PORT || 5000;
 const notificationWorkerRunner = createNotificationWorkerRunner();
 const otpDeliveryWorkerRunner = createOtpDeliveryWorkerRunner();

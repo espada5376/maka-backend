@@ -18,7 +18,7 @@ export function validateParams(schema) {
             next(createAppError(Errors.INVALID_REQUEST_PARAMS));
             return;
         }
-        req.params = result.data;
+        Object.assign(req.params, result.data);
         next();
     };
 }
@@ -29,7 +29,7 @@ export function validateQuery(schema) {
             next(createAppError(Errors.INVALID_REQUEST_QUERY));
             return;
         }
-        req.query = result.data;
+        Object.assign(req.query, result.data);
         next();
     };
 }

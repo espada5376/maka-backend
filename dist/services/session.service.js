@@ -1,9 +1,8 @@
-import { SessionRepository, } from "../database/repositories/session.repository.js";
 import { createAppError } from "../common/errors/create-app-error.js";
 import { Errors } from "../common/errors/errors.js";
 export class SessionService {
     sessionRepository;
-    constructor(sessionRepository = new SessionRepository()) {
+    constructor(sessionRepository) {
         this.sessionRepository = sessionRepository;
     }
     async getById(id) {

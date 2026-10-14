@@ -3,7 +3,7 @@ import { Router } from "express";
 import { AuthController } from "../../../controllers/auth.controller.js";
 
 export function createAuthRouter(
-  authController: AuthController = new AuthController(),
+  authController: AuthController,
 ) {
   const router = Router();
 

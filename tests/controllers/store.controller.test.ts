@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { NextFunction, Request, Response } from "express";
+import type { Request, Response } from "express";
 
 import { StoreController } from "../../src/controllers/store.controller.js";
 import type { Store } from "../../src/database/repositories/store.repository.js";
@@ -73,7 +73,7 @@ describe("StoreController", () => {
       expect(next).not.toHaveBeenCalled();
     });
 
-    it("should forward service errors", async () => {
+    it("should propagate service errors", async () => {
       const error = new Error("Store creation failed");
 
       const storeService = {
@@ -90,13 +90,13 @@ describe("StoreController", () => {
       } as unknown as Request;
 
       const res = createMockResponse();
-      const next = createMockNext();
 
-      await controller.create(req, res, next);
+await expect(
+  controller.create(req, res),
+).rejects.toBe(error);
 
-      expect(next).toHaveBeenCalledWith(error);
-      expect(res.status).not.toHaveBeenCalled();
-      expect(res.json).not.toHaveBeenCalled();
+expect(res.status).not.toHaveBeenCalled();
+expect(res.json).not.toHaveBeenCalled();
     });
   });
 
@@ -132,7 +132,7 @@ describe("StoreController", () => {
       expect(next).not.toHaveBeenCalled();
     });
 
-    it("should forward service errors", async () => {
+    it("should propagate service errors", async () => {
       const error = new Error("Store not found");
 
       const storeService = {
@@ -148,12 +148,13 @@ describe("StoreController", () => {
       } as unknown as Request;
 
       const res = createMockResponse();
-      const next = createMockNext();
 
-      await controller.getById(req, res, next);
+await expect(
+  controller.getById(req, res),
+).rejects.toBe(error);
 
-      expect(next).toHaveBeenCalledWith(error);
-      expect(res.status).not.toHaveBeenCalled();
+expect(res.status).not.toHaveBeenCalled();
+expect(res.json).not.toHaveBeenCalled();
     });
   });
 
@@ -189,7 +190,7 @@ describe("StoreController", () => {
       expect(next).not.toHaveBeenCalled();
     });
 
-    it("should forward service errors", async () => {
+    it("should propagate service errors", async () => {
       const error = new Error("Store lookup failed");
 
       const storeService = {
@@ -205,12 +206,13 @@ describe("StoreController", () => {
       } as unknown as Request;
 
       const res = createMockResponse();
-      const next = createMockNext();
 
-      await controller.getByOwnerId(req, res, next);
+await expect(
+  controller.getByOwnerId(req, res),
+).rejects.toBe(error);
 
-      expect(next).toHaveBeenCalledWith(error);
-      expect(res.status).not.toHaveBeenCalled();
+expect(res.status).not.toHaveBeenCalled();
+expect(res.json).not.toHaveBeenCalled();
     });
   });
 
@@ -257,7 +259,7 @@ describe("StoreController", () => {
       expect(next).not.toHaveBeenCalled();
     });
 
-    it("should forward service errors", async () => {
+    it("should propagate service errors", async () => {
       const error = new Error("Store update failed");
 
       const storeService = {
@@ -277,12 +279,13 @@ describe("StoreController", () => {
       } as unknown as Request;
 
       const res = createMockResponse();
-      const next = createMockNext();
 
-      await controller.update(req, res, next);
+await expect(
+  controller.update(req, res),
+).rejects.toBe(error);
 
-      expect(next).toHaveBeenCalledWith(error);
-      expect(res.status).not.toHaveBeenCalled();
+expect(res.status).not.toHaveBeenCalled();
+expect(res.json).not.toHaveBeenCalled();
     });
   });
 
@@ -324,7 +327,7 @@ describe("StoreController", () => {
       expect(next).not.toHaveBeenCalled();
     });
 
-    it("should forward service errors", async () => {
+    it("should propagate service errors", async () => {
       const error = new Error("Store activation failed");
 
       const storeService = {
@@ -343,12 +346,13 @@ describe("StoreController", () => {
       } as unknown as Request;
 
       const res = createMockResponse();
-      const next = createMockNext();
 
-      await controller.activate(req, res, next);
+await expect(
+  controller.activate(req, res),
+).rejects.toBe(error);
 
-      expect(next).toHaveBeenCalledWith(error);
-      expect(res.status).not.toHaveBeenCalled();
+expect(res.status).not.toHaveBeenCalled();
+expect(res.json).not.toHaveBeenCalled();
     });
   });
 
@@ -393,7 +397,7 @@ describe("StoreController", () => {
       expect(next).not.toHaveBeenCalled();
     });
 
-    it("should forward service errors", async () => {
+    it("should propagate service errors", async () => {
       const error = new Error("Store deactivation failed");
 
       const storeService = {
@@ -412,12 +416,13 @@ describe("StoreController", () => {
       } as unknown as Request;
 
       const res = createMockResponse();
-      const next = createMockNext();
 
-      await controller.deactivate(req, res, next);
+await expect(
+  controller.deactivate(req, res),
+).rejects.toBe(error);
 
-      expect(next).toHaveBeenCalledWith(error);
-      expect(res.status).not.toHaveBeenCalled();
+expect(res.status).not.toHaveBeenCalled();
+expect(res.json).not.toHaveBeenCalled();
     });
   });
 });

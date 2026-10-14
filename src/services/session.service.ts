@@ -9,7 +9,7 @@ import { Errors } from "../common/errors/errors.js";
 
 export class SessionService {
   constructor(
-    private readonly sessionRepository: SessionRepository = new SessionRepository(),
+    private readonly sessionRepository: SessionRepository,
   ) {}
 
   async getById(id: string): Promise<Session> {
