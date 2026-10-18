@@ -1830,10 +1830,33 @@ describe("OrderService", () => {
       );
 
       expect(result).toEqual(updatedOrder);
-      expect(mocks.orderRepository.updateStatus).toHaveBeenCalledWith(
+            expect(mocks.orderRepository.updateStatus).toHaveBeenCalledWith(
         ORDER_ID,
         "confirmed",
+        "pending",
       );
+    });
+
+       it("should reject a concurrent status change", async () => {
+      mocks.sessionRepository.findById.mockResolvedValue(
+        createSession({ user_id: USER_ID }),
+      );
+      mocks.storeRepository.findById.mockResolvedValue(createStore());
+      mocks.orderRepository.findById.mockResolvedValue(
+        createOrder({ status: "pending" }),
+      );
+      mocks.orderRepository.updateStatus.mockResolvedValue(undefined);
+
+      await expect(
+        orderService.updateStatusBySeller(
+          SESSION_ID,
+          STORE_ID,
+          ORDER_ID,
+          "confirmed",
+        ),
+      ).rejects.toMatchObject({
+        code: "ORDER_STATUS_CONFLICT",
+      });
     });
   });
 
@@ -2091,6 +2114,18 @@ describe("OrderService", () => {
       expect(order.status).toBe("cancelled");
     });
 
+        it("should pass the expected current status to the repository", async () => {
+      prepareOrderState("pending");
+
+      await orderService.updateStatus(ORDER_ID, "confirmed");
+
+      expect(mocks.orderRepository.updateStatus).toHaveBeenCalledWith(
+        ORDER_ID,
+        "confirmed",
+        "pending",
+      );
+    });
+
     it("should reject cancellation from ready", async () => {
       prepareOrderState("ready");
 
@@ -2197,7 +2232,7 @@ describe("OrderService", () => {
       });
     });
 
-    it("should reject when the repository cannot update the order", async () => {
+        it("should reject when the repository cannot update the order", async () => {
       prepareOrderState("pending");
 
       mocks.orderRepository.updateStatus.mockResolvedValue(undefined);
@@ -2205,8 +2240,8 @@ describe("OrderService", () => {
       await expect(
         orderService.updateStatus(ORDER_ID, "confirmed"),
       ).rejects.toMatchObject({
-        code: "ORDER_NOT_FOUND",
+        code: "ORDER_STATUS_CONFLICT",
       });
-    });
+    });    
   });
 });

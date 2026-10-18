@@ -73,7 +73,7 @@ const otpService = new OtpService(
     await db("otp_deliveries").del();
 await db("otp_verifications").del();
 await db("sessions").del();
-await db("users").del();
+await db("users").where({ phone }).del();
 
     const [session] = await db("sessions")
       .insert({

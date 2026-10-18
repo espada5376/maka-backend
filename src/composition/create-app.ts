@@ -18,6 +18,7 @@ import { PhoneService } from "../services/phone.service.js";
 import { OtpCryptoService } from "../services/otp-crypto.service.js";
 import { ProductImageService } from "../services/product-image.service.js";
 import { ProductService } from "../services/product.service.js";
+import { OrderService } from "../services/order.service.js";
 
 import { UserController } from "../controllers/user.controller.js";
 import { StoreController } from "../controllers/store.controller.js";
@@ -25,6 +26,7 @@ import { AuthController } from "../controllers/auth.controller.js";
 import { ProductImageController } from "../controllers/product-image.controller.js";
 import { ProductController } from "../controllers/product.controller.js";
 import { CartController } from "../controllers/cart.controller.js";
+import { OrderController } from "../controllers/order.controller.js";
 
 import { SharpImageProcessor } from "../image-processing/SharpImageProcessor.js";
 import { R2ImageStorage } from "../storage/R2ImageStorage.js";
@@ -85,5 +87,6 @@ export function createConfiguredApp() {
     productController: new ProductController(productService),
     productImageController: new ProductImageController(productImageService),
     cartController: new CartController(cartService),
+    orderController: new OrderController(new OrderService(db)),
   });
 }

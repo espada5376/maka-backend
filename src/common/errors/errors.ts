@@ -5,6 +5,12 @@ export const Errors = {
     statusCode: 404,
   },
 
+    ADMIN_UNAUTHORIZED: {
+    code: "ADMIN_UNAUTHORIZED",
+    message: "Administrator authorization required",
+    statusCode: 403,
+  },
+
   CATEGORY_INACTIVE: {
     code: "CATEGORY_INACTIVE",
     message: "Category is inactive",
@@ -100,6 +106,13 @@ export const Errors = {
     message: "Invalid order status transition",
     statusCode: 400,
   },
+
+    ORDER_STATUS_CONFLICT: {
+    code: "ORDER_STATUS_CONFLICT",
+    message: "Order status changed concurrently; reload and try again",
+    statusCode: 409,
+  },
+
 
   CURRENCY_MISMATCH: {
     code: "CURRENCY_MISMATCH",
@@ -379,6 +392,12 @@ export const Errors = {
   PRODUCT_IMAGE_INVALID_ORDER: {
     code: "PRODUCT_IMAGE_INVALID_ORDER",
     message: "Invalid product image order",
+    statusCode: 400,
+  },
+
+  IDEMPOTENCY_KEY_REQUIRED: {
+    code: "IDEMPOTENCY_KEY_REQUIRED",
+    message: "The Idempotency-Key header is required and must not exceed 100 characters",
     statusCode: 400,
   },
 

@@ -11,6 +11,7 @@ import { createAuthRouter } from "./common/http/routes/auth.routes.js";
 import { createProductImageRouter } from "./common/http/routes/product-image.routes.js";
 import { createProductRouter } from "./common/http/routes/product.routes.js";
 import { createCartRouter } from "./common/http/routes/cart.routes.js";
+import { createOrderRouter } from "./common/http/routes/order.routes.js";
 
 import { createSessionMiddleware } from "./common/middlewares/session.middleware.js";
 import { errorMiddleware } from "./common/middlewares/error.middleware.js";
@@ -54,6 +55,7 @@ export function createApp(dependencies: AppDependencies) {
   );
 
   app.use("/api/v1/cart", createCartRouter(dependencies.cartController));
+  app.use("/api/v1", createOrderRouter(dependencies.orderController));
 
   // Santé de l'API
   app.get("/api/health", (_req, res) => {

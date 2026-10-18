@@ -1,5 +1,6 @@
 import { Router } from "express";
 
+import { requireAdminKey } from "../../middlewares/require-admin-key.middleware.js";
 import { CategoryController } from "../../../controllers/category.controller.js";
 import { asyncHandler } from "../../http/async-handler.js";
 import {
@@ -43,12 +44,14 @@ export function createCategoryRouter(
 
   router.post(
     "/",
+    requireAdminKey,
     validateBody(createCategorySchema),
     asyncHandler(controller.create.bind(controller)),
   );
 
   router.patch(
     "/:id",
+    requireAdminKey,
     validateParams(categoryIdParamsSchema),
     validateBody(updateCategorySchema),
     asyncHandler(controller.update.bind(controller)),

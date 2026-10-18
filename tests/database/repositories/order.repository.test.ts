@@ -510,25 +510,36 @@ expect(orders).toHaveLength(2);
 
 });
 
-it("should update an order status", async () => {
-const { order } =
-await createOrder();
 
+it("should update an order status when the expected status matches", async () => {
+  const { order } = await createOrder();
 
-const updated =
-  await orderRepository.updateStatus(
+  const updated = await orderRepository.updateStatus(
     order.id,
+    "confirmed",
+    "pending",
+  );
+
+  expect(updated).toBeDefined();
+  expect(updated?.status).toBe("confirmed");
+});
+
+it("should not update an order status when the expected status does not match", async () => {
+  const { order } = await createOrder();
+
+  const updated = await orderRepository.updateStatus(
+    order.id,
+    "cancelled",
     "confirmed",
   );
 
-expect(updated).toBeDefined();
+  expect(updated).toBeUndefined();
 
-expect(updated?.status).toBe(
-  "confirmed",
-);
+  const unchangedOrder = await orderRepository.findById(order.id);
 
-
+  expect(unchangedOrder?.status).toBe("pending");
 });
+
 
 it("should create an order item", async () => {
 const { order, product } =

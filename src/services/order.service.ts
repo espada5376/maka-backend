@@ -367,12 +367,13 @@ export class OrderService implements IOrderService {
     }
 
     const updatedOrder = await this.orderRepository.updateStatus(
-      orderId,
-      newStatus,
-    );
+  orderId,
+  newStatus,
+  order.status,
+);
 
-    if (!updatedOrder) {
-      throw createAppError(Errors.ORDER_NOT_FOUND);
+        if (!updatedOrder) {
+      throw createAppError(Errors.ORDER_STATUS_CONFLICT);
     }
 
     return updatedOrder;
@@ -392,12 +393,13 @@ export class OrderService implements IOrderService {
     }
 
     const updatedOrder = await this.orderRepository.updateStatus(
-      orderId,
-      newStatus,
-    );
+  orderId,
+  newStatus,
+  order.status,
+);
 
-    if (!updatedOrder) {
-      throw createAppError(Errors.ORDER_NOT_FOUND);
+        if (!updatedOrder) {
+      throw createAppError(Errors.ORDER_STATUS_CONFLICT);
     }
 
     return updatedOrder;

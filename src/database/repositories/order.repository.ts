@@ -131,12 +131,17 @@ export class OrderRepository {
     return order;
   }
 
+  
   async updateStatus(
     id: string,
     status: OrderStatus,
+    expectedStatus: OrderStatus,
   ): Promise<Order | undefined> {
     const [order] = await this.database<Order>("orders")
-      .where({ id })
+      .where({
+        id,
+        status: expectedStatus,
+      })
       .update({
         status,
         updated_at: this.database.fn.now(),
@@ -145,6 +150,7 @@ export class OrderRepository {
 
     return order;
   }
+
 
   async findItems(orderId: string): Promise<OrderItem[]> {
     return this.database<OrderItem>("order_items")
