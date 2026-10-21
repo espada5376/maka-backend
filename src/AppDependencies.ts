@@ -6,6 +6,7 @@ import type { ProductController } from "./controllers/product.controller.js";
 import type { ProductImageController } from "./controllers/product-image.controller.js";
 import type { CartController } from "./controllers/cart.controller.js";
 import type { OrderController } from "./controllers/order.controller.js";
+import type { CategoryController } from "./controllers/category.controller.js";
 
 export interface AppDependencies {
   sessionService: SessionService;
@@ -16,4 +17,5 @@ export interface AppDependencies {
   orderController: OrderController;
   productController: ProductController;
   productImageController: ProductImageController;
+  categoryController: CategoryController;
 }

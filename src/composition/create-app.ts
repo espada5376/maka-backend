@@ -19,6 +19,7 @@ import { OtpCryptoService } from "../services/otp-crypto.service.js";
 import { ProductImageService } from "../services/product-image.service.js";
 import { ProductService } from "../services/product.service.js";
 import { OrderService } from "../services/order.service.js";
+import { CategoryService } from "../services/category.service.js";
 
 import { UserController } from "../controllers/user.controller.js";
 import { StoreController } from "../controllers/store.controller.js";
@@ -27,6 +28,7 @@ import { ProductImageController } from "../controllers/product-image.controller.
 import { ProductController } from "../controllers/product.controller.js";
 import { CartController } from "../controllers/cart.controller.js";
 import { OrderController } from "../controllers/order.controller.js";
+import { CategoryController } from "../controllers/category.controller.js";
 
 import { SharpImageProcessor } from "../image-processing/SharpImageProcessor.js";
 import { R2ImageStorage } from "../storage/R2ImageStorage.js";
@@ -41,6 +43,7 @@ export function createConfiguredApp() {
   const productRepository = new ProductRepository(db);
   const productImageRepository = new ProductImageRepository(db);
   const categoryRepository = new CategoryRepository(db);
+  
 
   const phoneService = new PhoneService();
 
@@ -79,6 +82,8 @@ export function createConfiguredApp() {
 
   const cartService = new CartService(db);
 
+  const categoryService = new CategoryService(categoryRepository);
+
   return createApp({
     sessionService,
     userController: new UserController(userService),
@@ -88,5 +93,6 @@ export function createConfiguredApp() {
     productImageController: new ProductImageController(productImageService),
     cartController: new CartController(cartService),
     orderController: new OrderController(new OrderService(db)),
+    categoryController: new CategoryController(categoryService),
   });
 }
