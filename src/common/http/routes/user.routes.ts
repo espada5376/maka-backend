@@ -7,6 +7,8 @@ import {
   updateUserSchema,
   userIdParamsSchema,
 } from "../validation/user.schemas.js";
+import { requireAuth } from "../../middlewares/require-auth.middleware.js";
+
 
 export function createUserRouter(
   userController: UserController,
@@ -14,10 +16,24 @@ export function createUserRouter(
   const router = Router();
 
   router.get(
+  "/me",
+  requireAuth,
+  asyncHandler(userController.getMe.bind(userController)),
+);
+
+router.patch(
+  "/me",
+  requireAuth,
+  validateBody(updateUserSchema),
+  asyncHandler(userController.updateMe.bind(userController)),
+);
+
+  router.get(
     "/:id",
     validateParams(userIdParamsSchema),
     asyncHandler(userController.getById.bind(userController)),
   );
+
 
   router.patch(
     "/:id",

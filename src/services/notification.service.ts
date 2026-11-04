@@ -102,24 +102,31 @@ export class NotificationService {
   return createNotification(database);
 }
 
-  async markAsRead(id: string): Promise<Notification> {
-    const notification = await this.notificationRepository.markAsRead(id);
+  async markAsRead(
+  id: string,
+  userId: string,
+): Promise<Notification> {
+  const notification = await this.notificationRepository.markAsRead(
+    id,
+    userId,
+  );
 
-    if (notification) {
-      return notification;
-    }
-
-    // markAsRead retourne undefined si la notification
-    // n'existe pas OU si elle est déjà lue.
-    const existingNotification = await this.notificationRepository.findById(id);
-
-    if (!existingNotification) {
-      throw createAppError(Errors.NOTIFICATION_NOT_FOUND);
-    }
-
-    // La notification est déjà lue : opération idempotente.
-    return existingNotification;
+  if (notification) {
+    return notification;
   }
+
+  // La notification n'a pas été modifiée.
+  // Vérifier son existence et son propriétaire.
+  const existingNotification = await this.notificationRepository
+    .findById(id);
+
+  if (!existingNotification || existingNotification.user_id !== userId) {
+    throw createAppError(Errors.NOTIFICATION_NOT_FOUND);
+  }
+
+  // La notification appartient à l'utilisateur et est déjà lue.
+  return existingNotification;
+}
 
   async markAllAsRead(userId: string): Promise<number> {
     const normalizedUserId = this.normalizeUserId(userId);

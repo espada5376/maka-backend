@@ -25,6 +25,28 @@ describe("User routes", () => {
       },
     ),
 
+updateMe: vi.fn(
+  (_req, res) => {
+    res.status(200).json({
+      success: true,
+      data: {
+        id: "user-1",
+      },
+    });
+  },
+),
+  
+ getMe: vi.fn(
+  (_req, res) => {
+    res.status(200).json({
+      success: true,
+      data: {
+        id: "user-1",
+      },
+    });
+  },
+),
+
     create: vi.fn(
       (_req, res) => {
         res.status(201).json({
@@ -68,6 +90,15 @@ describe("User routes", () => {
     const app = express();
 
     app.use(express.json());
+    
+app.use((req, _res, next) => {
+  req.session = {
+    user_id: req.headers["x-test-user-id"] || null,
+  } as any;
+
+  next();
+});
+
 
     app.use(
       "/api/v1/users",
@@ -113,6 +144,83 @@ describe("User routes", () => {
       },
     );
   });
+
+
+it("should define GET /me with authentication middleware", async () => {
+  const router = createUserRouter(userController as any);
+
+  const meRoute = router.stack.find(
+    (layer: any) => layer.route?.path === "/me",
+  );
+
+  expect(meRoute).toBeDefined();
+
+  expect(meRoute?.route.methods.get).toBe(true);
+
+  expect(
+    meRoute?.route.stack.some(
+      (handler: any) => handler.name === "requireAuth",
+    ),
+  ).toBe(true);
+});
+
+it("should define PATCH /me with authentication middleware", () => {
+  const router = createUserRouter(userController as any);
+
+  const meRoute = router.stack.find(
+  (layer: any) =>
+    layer.route?.path === "/me" &&
+    layer.route.methods.patch,
+);
+
+  expect(meRoute).toBeDefined();
+  expect(meRoute?.route.methods.patch).toBe(true);
+
+  expect(
+    meRoute?.route.stack.some(
+      (handler: any) => handler.name === "requireAuth",
+    ),
+  ).toBe(true);
+});
+
+it("should route PATCH /me to updateMe", async () => {
+  const response = await fetch(`${baseUrl}/api/v1/users/me`, {
+    method: "PATCH",
+    headers: {
+  "Content-Type": "application/json",
+  "x-test-user-id": "user-1",
+},
+    body: JSON.stringify({
+      name: "Kodjo",
+    }),
+  });
+
+  expect(response.status).toBe(200);
+  expect(userController.updateMe).toHaveBeenCalledTimes(1);
+
+  const req = userController.updateMe.mock.calls[0][0];
+
+  expect(req.session.user_id).toBe("user-1");
+  expect(req.body).toEqual({
+    name: "Kodjo",
+  });
+});
+
+it("should reject PATCH /me for an anonymous user", async () => {
+  const response = await fetch(`${baseUrl}/api/v1/users/me`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name: "Kodjo",
+    }),
+  });
+
+  expect(response.status).toBe(401);
+  expect(userController.updateMe).not.toHaveBeenCalled();
+});
+
 
   // ---------------------------------------------------------------------------
   // GET /api/v1/users/:id

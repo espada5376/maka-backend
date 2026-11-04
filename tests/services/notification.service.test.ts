@@ -728,64 +728,89 @@ describe("NotificationService", () => {
   });
 
   describe("markAsRead", () => {
-    it("marks an unread notification as read", async () => {
-      const {
-        service,
-        repository,
-      } = createService();
+  it("marks an unread notification as read", async () => {
+    const { service, repository } = createService();
 
-      const notification = createNotification({
-        read_at: new Date("2026-01-01T11:00:00.000Z"),
-      });
-
-      vi.mocked(repository.markAsRead).mockResolvedValue(notification);
-
-      await expect(service.markAsRead("notification-1")).resolves.toEqual(
-        notification,
-      );
-
-      expect(repository.markAsRead).toHaveBeenCalledWith("notification-1");
-      expect(repository.findById).not.toHaveBeenCalled();
+    const notification = createNotification({
+      read_at: new Date("2026-01-01T11:00:00.000Z"),
     });
 
-    it("throws NOTIFICATION_NOT_FOUND when the notification does not exist", async () => {
-      const {
-        service,
-        repository,
-      } = createService();
+    vi.mocked(repository.markAsRead).mockResolvedValue(notification);
 
-      vi.mocked(repository.markAsRead).mockResolvedValue(undefined);
-      vi.mocked(repository.findById).mockResolvedValue(undefined);
+    await expect(
+      service.markAsRead("notification-1", "user-1"),
+    ).resolves.toEqual(notification);
 
-      await expect(service.markAsRead("notification-1")).rejects.toMatchObject({
-        code: "NOTIFICATION_NOT_FOUND",
-      });
-
-      expect(repository.markAsRead).toHaveBeenCalledWith("notification-1");
-      expect(repository.findById).toHaveBeenCalledWith("notification-1");
-    });
-
-    it("returns the existing notification when it is already read", async () => {
-      const {
-        service,
-        repository,
-      } = createService();
-
-      const notification = createNotification({
-        read_at: new Date("2026-01-01T11:00:00.000Z"),
-      });
-
-      vi.mocked(repository.markAsRead).mockResolvedValue(undefined);
-      vi.mocked(repository.findById).mockResolvedValue(notification);
-
-      await expect(service.markAsRead("notification-1")).resolves.toEqual(
-        notification,
-      );
-
-      expect(repository.markAsRead).toHaveBeenCalledWith("notification-1");
-      expect(repository.findById).toHaveBeenCalledWith("notification-1");
-    });
+    expect(repository.markAsRead).toHaveBeenCalledWith(
+      "notification-1",
+      "user-1",
+    );
+    expect(repository.findById).not.toHaveBeenCalled();
   });
+
+  it("throws NOTIFICATION_NOT_FOUND when the notification does not exist", async () => {
+    const { service, repository } = createService();
+
+    vi.mocked(repository.markAsRead).mockResolvedValue(undefined);
+    vi.mocked(repository.findById).mockResolvedValue(undefined);
+
+    await expect(
+      service.markAsRead("notification-1", "user-1"),
+    ).rejects.toMatchObject({
+      code: "NOTIFICATION_NOT_FOUND",
+    });
+
+    expect(repository.markAsRead).toHaveBeenCalledWith(
+      "notification-1",
+      "user-1",
+    );
+    expect(repository.findById).toHaveBeenCalledWith("notification-1");
+  });
+
+  it("returns the existing notification when it is already read and belongs to the user", async () => {
+    const { service, repository } = createService();
+
+    const notification = createNotification({
+      read_at: new Date("2026-01-01T11:00:00.000Z"),
+    });
+
+    vi.mocked(repository.markAsRead).mockResolvedValue(undefined);
+    vi.mocked(repository.findById).mockResolvedValue(notification);
+
+    await expect(
+      service.markAsRead("notification-1", "user-1"),
+    ).resolves.toEqual(notification);
+
+    expect(repository.markAsRead).toHaveBeenCalledWith(
+      "notification-1",
+      "user-1",
+    );
+    expect(repository.findById).toHaveBeenCalledWith("notification-1");
+  });
+
+  it("throws NOTIFICATION_NOT_FOUND when the notification belongs to another user", async () => {
+    const { service, repository } = createService();
+
+    const notification = createNotification({
+      user_id: "user-2",
+      read_at: new Date("2026-01-01T11:00:00.000Z"),
+    });
+
+    vi.mocked(repository.markAsRead).mockResolvedValue(undefined);
+    vi.mocked(repository.findById).mockResolvedValue(notification);
+
+    await expect(
+      service.markAsRead("notification-1", "user-1"),
+    ).rejects.toMatchObject({
+      code: "NOTIFICATION_NOT_FOUND",
+    });
+
+    expect(repository.markAsRead).toHaveBeenCalledWith(
+      "notification-1",
+      "user-1",
+    );
+  });
+});
 
   describe("markAllAsRead", () => {
     it("marks all unread notifications as read", async () => {

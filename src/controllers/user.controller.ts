@@ -21,6 +21,31 @@ export class UserController {
 
     sendSuccess(res, 200, user);
   }
+  
+  async updateMe(
+  req: HttpRequest<unknown, UpdateUserBody>,
+  res: Response,
+): Promise<void> {
+  const userId = req.session.user_id!;
+
+  const user = await this.userService.update(
+    userId,
+    req.body,
+  );
+
+  sendSuccess(res, 200, user);
+}
+
+  async getMe(
+  req: HttpRequest,
+  res: Response,
+): Promise<void> {
+  const userId = req.session.user_id!;
+
+  const user = await this.userService.getById(userId);
+
+  sendSuccess(res, 200, user);
+}
 
   async update(
     req: HttpRequest<UserIdParams, UpdateUserBody>,

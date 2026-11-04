@@ -5,6 +5,7 @@ import cookieParser from "cookie-parser";
 
 import type { AppDependencies } from "./AppDependencies.ts";
 
+import { createNotificationRouter } from "./common/http/routes/notification.routes.js";
 import { createUserRouter } from "./common/http/routes/user.routes.js";
 import { createStoreRouter } from "./common/http/routes/store.routes.js";
 import { createAuthRouter } from "./common/http/routes/auth.routes.js";
@@ -13,6 +14,7 @@ import { createProductRouter } from "./common/http/routes/product.routes.js";
 import { createCartRouter } from "./common/http/routes/cart.routes.js";
 import { createOrderRouter } from "./common/http/routes/order.routes.js";
 import { createCategoryRouter } from "./common/http/routes/category.routes.js";
+import { createEventRouter } from "./common/http/routes/event.routes.js";
 
 import { createSessionMiddleware } from "./common/middlewares/session.middleware.js";
 import { errorMiddleware } from "./common/middlewares/error.middleware.js";
@@ -61,6 +63,15 @@ export function createApp(dependencies: AppDependencies) {
   "/api/v1/categories",
   createCategoryRouter(dependencies.categoryController),
   );
+  app.use(
+  "/api/v1/events",
+  createEventRouter(dependencies.eventController),
+);
+
+app.use(
+  "/api/v1/notifications",
+  createNotificationRouter(dependencies.notificationController),
+);
 
   // Santé de l'API
   app.get("/api/health", (_req, res) => {

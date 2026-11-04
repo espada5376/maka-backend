@@ -11,6 +11,12 @@ export const Errors = {
     statusCode: 403,
   },
 
+USER_UNAUTHORIZED: {
+  code: "USER_UNAUTHORIZED",
+  message: "User authentication required",
+  statusCode: 401,
+},
+
   CATEGORY_INACTIVE: {
     code: "CATEGORY_INACTIVE",
     message: "Category is inactive",

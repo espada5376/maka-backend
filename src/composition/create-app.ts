@@ -8,6 +8,9 @@ import { StoreRepository } from "../database/repositories/store.repository.js";
 import { ProductImageRepository } from "../database/repositories/product-image.repository.js";
 import { ProductRepository } from "../database/repositories/product.repository.js";
 import { CategoryRepository } from "../database/repositories/category.repository.js";
+import { EventRepository } from "../database/repositories/event.repository.js";
+import { NotificationRepository } from "../database/repositories/notification.repository.js";
+import { NotificationDeliveryRepository } from "../database/repositories/notification-delivery.repository.js";
 
 import { CartService } from "../services/cart.service.js";
 import { UserService } from "../services/user.service.js";
@@ -20,6 +23,8 @@ import { ProductImageService } from "../services/product-image.service.js";
 import { ProductService } from "../services/product.service.js";
 import { OrderService } from "../services/order.service.js";
 import { CategoryService } from "../services/category.service.js";
+import { EventServiceImpl } from "../services/event.service.js";
+import { NotificationService } from "../services/notification.service.js";
 
 import { UserController } from "../controllers/user.controller.js";
 import { StoreController } from "../controllers/store.controller.js";
@@ -29,6 +34,8 @@ import { ProductController } from "../controllers/product.controller.js";
 import { CartController } from "../controllers/cart.controller.js";
 import { OrderController } from "../controllers/order.controller.js";
 import { CategoryController } from "../controllers/category.controller.js";
+import { EventController } from "../controllers/event.controller.js";
+import { NotificationController } from "../controllers/notification.controller.js";
 
 import { SharpImageProcessor } from "../image-processing/SharpImageProcessor.js";
 import { R2ImageStorage } from "../storage/R2ImageStorage.js";
@@ -43,7 +50,9 @@ export function createConfiguredApp() {
   const productRepository = new ProductRepository(db);
   const productImageRepository = new ProductImageRepository(db);
   const categoryRepository = new CategoryRepository(db);
-  
+  const eventRepository = new EventRepository(db);
+  const notificationRepository = new NotificationRepository(db);
+  const notificationDeliveryRepository = new NotificationDeliveryRepository(db);
 
   const phoneService = new PhoneService();
 
@@ -83,6 +92,12 @@ export function createConfiguredApp() {
   const cartService = new CartService(db);
 
   const categoryService = new CategoryService(categoryRepository);
+  const eventService = new EventServiceImpl(eventRepository);
+  const notificationService = new NotificationService(
+  notificationRepository,
+  notificationDeliveryRepository,
+  db,
+);
 
   return createApp({
     sessionService,
@@ -94,5 +109,7 @@ export function createConfiguredApp() {
     cartController: new CartController(cartService),
     orderController: new OrderController(new OrderService(db)),
     categoryController: new CategoryController(categoryService),
+    eventController: new EventController(eventService),
+    notificationController: new NotificationController(notificationService),
   });
 }

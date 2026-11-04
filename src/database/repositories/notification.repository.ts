@@ -73,17 +73,23 @@ export class NotificationRepository {
   return notification;
 }
 
-  async markAsRead(id: string): Promise<Notification | undefined> {
-    const [notification] = await this.database<Notification>("notifications")
-      .where({ id })
-      .whereNull("read_at")
-      .update({
-        read_at: this.database.fn.now(),
-      })
-      .returning("*");
+  async markAsRead(
+  id: string,
+  userId: string,
+): Promise<Notification | undefined> {
+  const [notification] = await this.database<Notification>("notifications")
+    .where({
+      id,
+      user_id: userId,
+    })
+    .whereNull("read_at")
+    .update({
+      read_at: this.database.fn.now(),
+    })
+    .returning("*");
 
-    return notification;
-  }
+  return notification;
+}
 
   async markAllAsRead(userId: string): Promise<number> {
     return this.database<Notification>("notifications")
