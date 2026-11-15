@@ -31,6 +31,7 @@ function createTestApp(
 
   const storeController = {
     create: vi.fn(),
+    getMe: vi.fn(),
     getByOwnerId: vi.fn(),
     getById: vi.fn(),
     update: vi.fn(),
@@ -400,6 +401,7 @@ it("should reject GET /users/me for an anonymous user", async () => {
 
   const storeController = {
     create: vi.fn(),
+    getMe: vi.fn(),
     getByOwnerId: vi.fn(),
     getById: vi.fn((req, res) => {
       res.status(200).json({

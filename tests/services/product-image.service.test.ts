@@ -7,6 +7,7 @@ describe("ProductImageService", () => {
   const productImageRepository = {
     findById: vi.fn(),
     findByProductId: vi.fn(),
+    findPrimaryImagesByProductIds: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
     reorderPositions: vi.fn(),
@@ -209,6 +210,56 @@ describe("ProductImageService", () => {
       ).rejects.toThrow(error);
     });
   });
+
+  describe("getPrimaryImagesByProductIds", () => {
+  it("should return primary image URLs indexed by product ID", async () => {
+    productImageRepository.findPrimaryImagesByProductIds.mockResolvedValue([
+      {
+        ...existingImage,
+        product_id: "product-1",
+      },
+      {
+        ...existingImage,
+        id: "image-2",
+        product_id: "product-2",
+        storage_key: "products/product-2/image-2.webp",
+      },
+    ]);
+
+    await expect(
+      productImageService.getPrimaryImagesByProductIds([
+        "product-1",
+        "product-2",
+      ]),
+    ).resolves.toEqual(
+      new Map([
+        [
+          "product-1",
+          "https://images.maka.tg/products/product-1/image-1.webp",
+        ],
+        [
+          "product-2",
+          "https://images.maka.tg/products/product-2/image-2.webp",
+        ],
+      ]),
+    );
+
+    expect(
+      productImageRepository.findPrimaryImagesByProductIds,
+    ).toHaveBeenCalledWith(["product-1", "product-2"]);
+  });
+
+  it("should return an empty map when no product IDs are provided", async () => {
+    await expect(
+      productImageService.getPrimaryImagesByProductIds([]),
+    ).resolves.toEqual(new Map());
+
+    expect(
+      productImageRepository.findPrimaryImagesByProductIds,
+    ).not.toHaveBeenCalled();
+  });
+});
+
 
   describe("create", () => {
     it("should process, upload and create the image", async () => {

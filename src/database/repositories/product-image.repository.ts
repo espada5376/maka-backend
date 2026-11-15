@@ -41,6 +41,18 @@ export class ProductImageRepository {
       .orderBy("position", "asc");
   }
 
+  async findPrimaryImagesByProductIds(
+  productIds: string[],
+): Promise<ProductImage[]> {
+  if (productIds.length === 0) {
+    return [];
+  }
+
+  return this.database<ProductImage>("product_images")
+    .whereIn("product_id", productIds)
+    .where("position", 0);
+}
+
   async create(data: CreateProductImageData): Promise<ProductImage> {
     const [image] = await this.database<ProductImage>("product_images")
       .insert({

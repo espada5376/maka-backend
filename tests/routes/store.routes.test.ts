@@ -1,6 +1,7 @@
 import express from "express";
 import type { Server } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Request, Response, NextFunction } from "express";
 
 import { createStoreRouter } from "../../src/common/http/routes/store.routes.js";
 import type { StoreController } from "../../src/controllers/store.controller.js";
@@ -22,6 +23,14 @@ describe("StoreRouter", () => {
     getByOwnerId: vi.fn((_req, res) => {
       res.status(200).json();
     }),
+
+    getMe: vi.fn((_req, res) => {
+  res.status(200).json({
+    success: true,
+    data: { id: "store-1", owner_id: "user-1" },
+  });
+}),
+
     getById: vi.fn((_req, res) => {
       res.status(200).json();
     }),
@@ -40,6 +49,13 @@ describe("StoreRouter", () => {
   const app = express();
 
   app.use(express.json());
+    app.use((req: Request, _res: Response, next: NextFunction) => {
+    req.session = {
+      user_id: req.header("x-test-user-id") ?? undefined,
+    } as Request["session"];
+
+    next();
+  });
   app.use(
     "/api/v1/stores",
     createStoreRouter(completeController as StoreController),
@@ -57,6 +73,10 @@ describe("StoreRouter", () => {
     });
   });
 }
+
+
+
+
 
   it("should route POST /api/v1/stores to create", async () => {
     const controller = {
@@ -106,6 +126,31 @@ describe("StoreRouter", () => {
     expect(controller.getByOwnerId).toHaveBeenCalledOnce();
   });
 
+    it("should route GET /api/v1/stores/me to getMe", async () => {
+    const controller = {
+      getMe: vi.fn((_req, res) => {
+        res.status(200).json({
+          success: true,
+          data: { id: "store-1", owner_id: "user-1" },
+        });
+      }),
+    };
+
+    const port = await startServer(controller);
+
+    const response = await fetch(
+      `http://127.0.0.1:${port}/api/v1/stores/me`,
+      {
+        headers: {
+          "x-test-user-id": "user-1",
+        },
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(controller.getMe).toHaveBeenCalledOnce();
+  });
+
   it("should route GET /api/v1/stores/:id to getById", async () => {
     const controller = {
       getById: vi.fn((_req, res) => {
@@ -153,6 +198,26 @@ describe("StoreRouter", () => {
 
     expect(response.status).toBe(200);
     expect(controller.update).toHaveBeenCalledOnce();
+  });
+
+    it("should reject GET /api/v1/stores/me for anonymous users", async () => {
+    const controller = {
+      getMe: vi.fn((_req, res) => {
+        res.status(200).json({
+          success: true,
+          data: { id: "store-1" },
+        });
+      }),
+    };
+
+    const port = await startServer(controller);
+
+    const response = await fetch(
+      `http://127.0.0.1:${port}/api/v1/stores/me`,
+    );
+
+    expect(response.status).toBe(401);
+    expect(controller.getMe).not.toHaveBeenCalled();
   });
 
   it("should route PATCH /api/v1/stores/:id/activate to activate", async () => {

@@ -1,5 +1,6 @@
 import { Router } from "express";
 
+import { requireAuth } from "../../middlewares/require-auth.middleware.js";
 import { StoreController } from "../../../controllers/store.controller.js";
 import { asyncHandler } from "../../http/async-handler.js";
 import {
@@ -32,6 +33,12 @@ export function createStoreRouter(
     asyncHandler(
       storeController.getByOwnerId.bind(storeController),
     ),
+  );
+
+    router.get(
+    "/me",
+    requireAuth,
+    asyncHandler(storeController.getMe.bind(storeController)),
   );
 
   router.get(

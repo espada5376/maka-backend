@@ -89,7 +89,15 @@ export function createConfiguredApp() {
     new R2ImageStorage(getR2Config()),
   );
 
-  const cartService = new CartService(db);
+  const cartService = new CartService(
+  db,
+  undefined,
+  undefined,
+  undefined,
+  undefined,
+  undefined,
+  productImageService,
+);
 
   const categoryService = new CategoryService(categoryRepository);
   const eventService = new EventServiceImpl(eventRepository);

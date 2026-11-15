@@ -15,6 +15,18 @@ export class StoreController {
     private readonly storeService: StoreService,
   ) {}
 
+    async getMe(
+    req: HttpRequest,
+    res: Response,
+  ): Promise<void> {
+    const store = await this.storeService.getByOwnerId(
+      req.session.user_id!,
+    );
+
+    sendSuccess(res, 200, store);
+  }
+
+
   async create(
     req: HttpRequest<{}, CreateStoreBody>,
     res: Response,

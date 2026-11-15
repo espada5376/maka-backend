@@ -67,6 +67,26 @@ export class ProductImageService {
     return images.map((image) => this.toResponse(image));
   }
 
+  async getPrimaryImagesByProductIds(
+  productIds: string[],
+): Promise<Map<string, string>> {
+  if (productIds.length === 0) {
+    return new Map();
+  }
+
+  const images =
+    await this.productImageRepository.findPrimaryImagesByProductIds(
+      productIds,
+    );
+
+  return new Map(
+    images.map((image) => [
+      image.product_id,
+      this.imageStorage.getUrl(image.storage_key),
+    ]),
+  );
+}
+
   async create(data: CreateProductImageInput): Promise<ProductImageResponse> {
     const productId = this.normalizeProductId(data.product_id);
 

@@ -2,6 +2,8 @@ import { Knex } from "knex";
 
 import db from "../database/knex.js";
 
+import { ProductImageService } from "./product-image.service.js";
+
 import { CartRepository } from "../database/repositories/cart.repository.js";
 import { CartItemRepository } from "../database/repositories/cart-item.repository.js";
 import { ProductRepository } from "../database/repositories/product.repository.js";
@@ -13,12 +15,19 @@ import { Errors } from "../common/errors/errors.js";
 
 export type CartItemState = "available" | "unavailable";
 
+export interface CartProductView {
+  name: string;
+  price: number;
+  image_url: string | null;
+}
+
 export interface CartItemWithState {
   id: string;
   cart_id: string;
   product_id: string;
   quantity: number;
   state: CartItemState;
+  product: CartProductView;
 }
 
 export interface CartView {
@@ -35,18 +44,21 @@ export class CartService {
     private readonly productRepository = new ProductRepository(database),
     private readonly storeRepository = new StoreRepository(database),
     private readonly eventRepository = new EventRepository(database),
+    private readonly productImageService: ProductImageService,
   ) {}
 
   async getCart(sessionId: string): Promise<CartView> {
-    const cart = await this.cartRepository.findBySessionId(sessionId);
-
-    if (!cart) {
-      throw createAppError(Errors.CART_NOT_FOUND);
-    }
+    const cart =
+  await this.cartRepository.findOrCreateBySessionId(sessionId);
 
     const items = await this.cartItemRepository.findByCartIdWithProductContext(
       cart.id,
     );
+
+    const primaryImages =
+  await this.productImageService.getPrimaryImagesByProductIds(
+    items.map((item) => item.product_id),
+  );
 
     const itemsWithState: CartItemWithState[] = items.map((item) => {
       const available =
@@ -55,12 +67,17 @@ export class CartService {
         item.product_availability === "available";
 
       return {
-        id: item.id,
-        cart_id: item.cart_id,
-        product_id: item.product_id,
-        quantity: item.quantity,
-        state: available ? "available" : "unavailable",
-      };
+  id: item.id,
+  cart_id: item.cart_id,
+  product_id: item.product_id,
+  quantity: item.quantity,
+  state: available ? "available" : "unavailable",
+  product: {
+    name: item.product_name,
+    price: Number(item.product_price),
+    image_url: primaryImages.get(item.product_id) ?? null,
+  },
+};
     });
 
     return {
@@ -73,11 +90,8 @@ export class CartService {
   async addItem(sessionId: string, productId: string, quantity: number) {
     this.validateQuantity(quantity);
 
-    const cart = await this.cartRepository.findBySessionId(sessionId);
-
-    if (!cart) {
-      throw createAppError(Errors.CART_NOT_FOUND);
-    }
+    const cart =
+  await this.cartRepository.findOrCreateBySessionId(sessionId);
 
     const product = await this.productRepository.findById(productId);
 
@@ -180,11 +194,8 @@ export class CartService {
   ) {
     this.validateQuantity(quantity);
 
-    const cart = await this.cartRepository.findBySessionId(sessionId);
-
-    if (!cart) {
-      throw createAppError(Errors.CART_NOT_FOUND);
-    }
+    const cart =
+  await this.cartRepository.findOrCreateBySessionId(sessionId);
 
     const item = await this.cartItemRepository.findById(itemId);
 
@@ -236,11 +247,8 @@ export class CartService {
   }
 
   async removeItem(sessionId: string, itemId: string): Promise<void> {
-    const cart = await this.cartRepository.findBySessionId(sessionId);
-
-    if (!cart) {
-      throw createAppError(Errors.CART_NOT_FOUND);
-    }
+    const cart =
+  await this.cartRepository.findOrCreateBySessionId(sessionId);
 
     const item = await this.cartItemRepository.findById(itemId);
 
